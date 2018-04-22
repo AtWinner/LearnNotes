@@ -29,7 +29,7 @@ Parcelable也是一个接口，只要实现这个接口，这个类的对象就�
 Parcelable的方法说明
 <html>
 <!--在这里插入内容-->
-<table>
+<table width="1000">
   <tr>
     <th>方法</th>
     <th>功能</th>
@@ -74,10 +74,67 @@ Serializable是Java中的序列化接口，其使用起来方便简单但是开�
 - 从Android Framework角度来讲，Binder是ServiceManager链接各种Manager(ActivityManager, WindowManager...)和相应ManagerService的桥梁；
 - 从Android应用层来讲，Binder的客户端和服务器进行通信的媒介，当bindService的时候，服务端会返回一个包含了服务端业务调用的Binder对象，通过这个Binder对象客户端就可以获取服务端提供的服务或数据，这里的服务端包括普通服务和基于AIDL的服务。
 
+## 关于AIDL
+### DESCRIPTOR
+Binder的唯一标识，一般用当前Binder的类名表示，比如`com.luna.aidltest.IMyAidlInterface`
+### asInterface(android.os.IBinder obj)
+用于将服务端的Binder对象转换成客户端所需的AIDL接口类型的对象，这种转换过程是区分进程的，如果客户端和服务端位于同一进程，那么次方法返回的就是服务端的Stub对象本身，否则返回的是系统封装后的Stub.proxy对象
+### asBinder
+此方法用于返回当前Binder对象
+### onTransact
+这个方法运行在服务端的Binder线程池中，当客户端发起跨进程通信请求时，远程请求会通过系统底层封装后交由此方法处理。该方法的原型为：
+
+```
+public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+    switch(code) {
+        case xxx://执行一些操作
+            break;
+        default:
+            return super.onTransact(code, data, reply, flags);
+    }
+}
+```
+服务端通过code可以确定客户端所请求的目标方法是什么，接着从data中取出目标方法中所需的参数，最后执行目标方法。需要注意的是，如果此方法返回false，那么客户端的请求会失败，因此我们可以利用这个特性来做权限验证，毕竟我们也不希望随便一个进程都能远程调用我们的服务。
+
+### Proxy#方法名
+这个方法名对应着在AIDL文件中生命的方法名。
+这个方法运行在客户端，当客户端远程调用此方法时，它的内部实现是这样的：
+1. 首先创建该方法所需要的输入型Parcel对象 _data、输出型Parcel对象 _reply 和返回值对象List；
+2. 然后把该方法的参数信息写入_data中（如果有参数的话）；
+3. 然后调用transact的方法来发起RPC(远程过程调用)的请求，同时当前线程挂起；
+4. 然后服务端的onTransact方法会被调用，知道RPC过程返回后，当前线程继续执行，从_reply中取出RPC过程的返回结果；
+5. 最后返回_reply中的数据。
+
+
+```
+Parcel _data = Parcel.obtain();
+Parcel _reply = Parcel.obtain();
+
+try {
+    _data.writeInterfaceToken("com.luna.aidltest.IMyAidlInterface");
+    _data.writeString(aa);
+    this.mRemote.transact(1, _data, _reply, 0);
+    _reply.readException();
+} finally {
+    _reply.recycle();
+    _data.recycle();
+}
+```
+
+### 另外需要注意的是
+1. 当客户端发起远程请求时，由于当前线程会被挂起至服务端进程返回数据，所以如果一个远程方法是很耗时的，那么不能在UI线程中发起此远程请求；
+2. 由于服务端的Binder方法运行在Binder线程池中，所以Binder方法不管是否耗时都应该采用同步的方法去实现，因为它已经运行在一个线程池中了。
+![Binder的工作机制](http://oi9a3yd8k.bkt.clouddn.com/Binder%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.png)
+
+---
+
+我们发现，其实完全可以提供AIDL问阿金即可实现Binder，之所以提供AIDL文件，是为了方便系统为我们生成代码。系统根据AIDL文件生成Java文件的格式是固定的，我们可以抛弃AIDL文件直接写一个Binder出来。详见P55-P61
+
+
 # 选用合适的IPC方式
 
 <html>
-<table border="1">
+<table width="1000">
   <tr>
     <th>名称</th>
     <th>优点</th>
