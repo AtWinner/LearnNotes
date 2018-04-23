@@ -130,6 +130,43 @@ try {
 
 我们发现，其实完全可以提供AIDL问阿金即可实现Binder，之所以提供AIDL文件，是为了方便系统为我们生成代码。系统根据AIDL文件生成Java文件的格式是固定的，我们可以抛弃AIDL文件直接写一个Binder出来。详见P55-P61
 
+# 使用Messenger
+Messenger可以翻译为信使，顾名思义，通过它可以在不同的进程中传递Message对象，在Message中放入我们需要传递的数据，就可以轻松地实现数据的进程间传递。Messenger是一种轻量级的IPC方案，它的底层实现是AIDL，下面是Messenger的两个构造方法，我们可以看到AIDL的痕迹。
+
+```
+public Messenger(Handler handler) {
+    mTarget = target.getIMessenfer();
+}
+
+public Messenger(IBinder target) {
+    mTarget = IMessenger.Stub.asInterface(target);
+}
+```
+Messenger的使用方法很简单，它对AIDL做了封装，使得我们可以更简便的进行线程通信。同时，由于它一次处理一个请求，因此在服务端我们不用考虑线程同步的问题，这是因为服务端中不存在并发执行的情形
+## 服务端进程
+首先，我们需要在服务端创建一个Service来处理客户端的连接请求，同时创建一个Binder并通过它来创建一个Messenger对象，然后在Service的onBind中返回这个Messenger对象底层的Binder即可。
+
+## 客户端进程
+客户端进程中，首先要绑定服务端的Service，绑定成功之后服务端返回的IBinder对象创建一个Messenger，通过这个Messenger就可以向服务端发送消息了，发消息类型为Message对象。如果需要服务端能够回应客户端，就和服务端一样，我们还需要创建一个Handler并创建一个新的Messenger，并把这个Messenger对象通过Message的replyTo参数传递给服务端，服务端通过这个replyTo参数就可以回应客户端。
+
+![Messenger工作过程](http://oi9a3yd8k.bkt.clouddn.com/Messenger%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86.png)
+
+
+# 使用AIDL
+在AIDL文件中，并不是所有的数据都是可以使用的。AIDL支持的数据类型：
+- 基本数据类型（int, long, char, boolean, double等）；
+- String和CharSequence；
+- List：只支持ArrayList，里面的元素都必须能够被AIDL支持；
+- Map：只支持HashMap，里面的每个元素都必须被AIDL支持，包括key和value；
+- Parcelable：所有实现了Parcelable接口的对象；
+- AIDL：所有的AIDL接口本身也可以在AIDL文件中使用。
+
+需要注意的是：
+- AIDL的包结构在服务端和客户端要保持一致，否则运行会出错，这是因为客户端需要反序列化服务端中和AIDL接口相关的所有类，如果类的完整路径不一样的话，就无法成功反序列化，程序也就无法正常运行。
+- 客户端调用远程服务的方法，被调用的方法运行在服务端的Binder线程池中，同客户端线程会被挂起，这个时候如果服务端方法执行比较耗时，就会导致客户端线程长时间地阻塞在这里，而如果客户端线程是UI线程的话，会导致客户端ANR。因此我们明确知道某个远程方法是耗时的，那么就要避免在客户端的UI线程去访问。
+- 由于客户端的onServiceConnected和onServiceDisconnected方法都是在UI线程中的，所以也不可以在它们中直接调用服务端的耗时操作。
+- 由于服务端的方法本身就是运行在服务端的Binder线程池中的，所以服务端方法本身就是可以执行大量耗时操作的，这个时候切记不要在服务端方法中开线程去进行异步任务，除非你明确知道自己在干什么，否则不建议这么做。
+
 
 # 选用合适的IPC方式
 
