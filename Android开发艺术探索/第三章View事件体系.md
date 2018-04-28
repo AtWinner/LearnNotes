@@ -42,7 +42,7 @@ TouchSlop是系统所能识别出的被认为是滑动的最小距离，换句�
 <dimen name="config_viewConfigurationTouchSlop">8dp</dimen>
 ```
 
-## VelocityTracker、GestureDetector和Scriller
+## VelocityTracker、GestureDetector和Scroller
 ### VelocityTracker
 速度追踪，用于追踪手指在滑动过程中的速度，包括水平和竖直方向的速度。使用过程：
 首先，在View和onTouchEvent方法中追踪当前单击事件的速度：
@@ -58,5 +58,7 @@ velocityTracker.computeCurrentVelocity(1000);
 int xVelocity = (int) velocityTracker.getXVelocity();
 int yVelocity = (int) velocityTracker.getYVelocity();
 ```
+
+
 
 
