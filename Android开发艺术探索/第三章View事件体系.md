@@ -59,6 +59,99 @@ int xVelocity = (int) velocityTracker.getXVelocity();
 int yVelocity = (int) velocityTracker.getYVelocity();
 ```
 
+需要注意：第一点，获取速度之前必须先计算速度，即getXVelocity和getYVelocity这两个方法的前面必须要调用computeCurrentVelocity方法；
+第二点，这里的速度是指一段时间内手指所滑动过的像素。
+速度的计算公式：`进度=（终点位置-起点位置）÷时间段`
+
+## GestureDetector
+手势检测，用于辅助检测用户的点击、滑动、长按、双击等行为。使用GestureDetector：
+
+首先，需要创建一个GestureDetector对象并实现OnGestureListener接口，根据需要我们还可以实现OnDoubleTapListener从而能监听双击的行为：
+```
+GestureDetector mGestureDetector = new GestureDetector(this);
+//解决长按屏幕后无法拖动的现象
+mGestureDetector.setIsLongpressEnabled(false);
+```
+接着，接管目标View的OnTouchEvent方法，在待监听View的onTouchEvent方法中添加如下实现：
+
+```
+boolean consume = mGestureDetector.onTouchEvent(event);
+return conusme;
+```
+然后，就可以有选择的实现OnGestureListener和OnDoubleTapListener中的方法了，方法介绍
+
+<html>
+<table width="1000">
+  <tr>
+    <th>方法名</th>
+    <th>描述</th>
+  </tr>
+  <tr>
+    <td>OnGestureListener<br/>#onDown</td>
+    <td>手指轻轻触摸屏幕的一瞬间，由1个ACTION_DOWN</td>
+  </tr>
+  <tr>
+    <td>OnGestureListener<br/>#onShowPress</td>
+    <td>手指轻轻触摸屏幕，尚未松开或拖动，由1个ACTION_DOWN出发<br/>
+    它强调的是没有松开或者拖动的状态</td>
+  </tr>
+  <tr>
+    <td>OnGestureListener<br/>#onSingleTapUp</td>
+    <td>手指松开，伴随着1个MotionEvent ACTION_UP而触发，这是单击行为</td>
+  </tr>
+  <tr>
+    <td>OnGestureListener<br/>#onScroll</td>
+    <td>手指按下屏幕并拖动，由1个ACTION_DOWN，多个ACTION_MOVE触发，这是拖动行为</td>
+  </tr>
+  <tr>
+    <td>OnGestureListener<br/>#onLongPress</td>
+    <td>用户长按屏幕不放</td>
+  </tr>
+  <tr>
+    <td>OnGestureListener<br/>#onFling</td>
+    <td>用户按下屏幕，快速的滑动后松开，由1个ACTION_DOWN、多个ACTION_MOVE和1个ACTION_UP触发，这是快速滑动行为</td>
+  </tr>
+  <tr>
+    <td>OnDoubleTapListener<br/>#onDoubleTap</td>
+    <td>双击，由两次连续的单击组成，它不可能和onSingleTapConfirmed共存</td>
+  </tr>
+  <tr>
+    <td>OnDoubleTapListener<br/>#onSingleTapConfirmed</td>
+    <td>严格的单击行为。注意它和onSingleTapUp的区别，如果触发了onSingleTapConfirmed，那么后面就不可能紧跟着另一个单击行为，即这只可能是单击，而不可能是双击中的一次单击</td>
+  </tr>
+  <tr>
+    <td>OnDoubleTapListener<br/>#onDoubleTapEvent</td>
+    <td>表示发生了双击行为，在双击的期间，ACTION_DOWN、ACTION_MOVE和ACTION_UP都会触发此回调</td>
+  </tr>
+</table>
+</html>
+
+### Scroller
+弹性滑动对象，用于实现View的弹性滑动。我们知道，当使用View的scrollTo/scrollBy方法来进行滑动时，其过程是瞬间完成的，这是没有过渡效果的滑动用户体验不好，这个时候就可以使用Scroller来实现有过渡效果的滑动，其过程不是瞬间完成的，而是在一定时间内完成的。Scroller本身无法让View弹性滑动，它需要和View的computeScroll方法配合使用才能共同完成这个功能。
+
+```
+Scroller mScroller = new Scroller(mContext);
+
+//缓慢滑动到指定位置
+private void smoothScrollerTo(int destX, int destY) {
+    int scrollX = getScrollX();
+    int delta = destX - scrollX;
+    //1000ms内滑向destX，效果就是慢慢滑动
+    mScroller.startScroll(scrollX, 0, delta, 0, 1000);
+    invalidate();
+}
+
+@Override
+public void computeScroll(){
+    if(mScroller.computeScrollOffset()) {
+        scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+        postInvalidate();
+    }
+}
+```
+
+
+
 
 
 
