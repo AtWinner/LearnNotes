@@ -1,3 +1,4 @@
+# 传递规则
 点击事件分发过程由3个很重要的方法共同完成：dispatchTouchEvent、onInterceptTouchEvent和onTouchEvent。
 
 **public boolean dispatchTouchEvent(MotionEvent ev)**：用来进行事件的分发。如果事件能够传递给当前View，那么此方法一定会被调用，返回值受当前View的onTouchEvent和下级View的dispatchTouchEvent方法影响，++表示是否消耗当前事件++。
@@ -33,3 +34,44 @@ public boolean dispatchTouchEvent(MotionEvent ev) {
 4. 某个View一旦开始处理事件，如果它不消耗ACTION_DOWN事件，那么同一事件序列中的其他事件都不会再交给它来处理，并且事件将重新交给它父元素去处理，即父元素的onTouchEvent会被调用。意思就是事件一旦交给一个View处理，那么它就必须消耗掉，否则同一事件序列中剩下的事件都不会再交给它处理了。
 5. 如果View不消耗除ACTION_DOWN意外的其他事件，那么这个点击事件会消失，此时父元素的onTouchEvent并不会被调用，并且当前View可以持续收到后续的事件，最终这些消失的点击事件会传递给Activity处理。
 6. ViewGroup默认不拦截任何事件，源码中的ViewGroup的onInterceptTouchEvent方法默认返回false。
+7. View没有onInterceptTouchEvent方法，一旦有点击事件传递给它，那么它的onTouchEvent方法就会被调用。
+8. View的onTouchEvent默认都会消耗事件，除非它是不可点击的，==clickable和longClickable同时为false==。View的longClickable默认都为false，clickable要分情况，比如Button的clickable为true，TextView的clickable为false。
+9. View的enable属性不影响onTouchEvent的默认返回值。
+10. onClick会发生的前提是当前View是可点击的，并且它收到了down和up的事件。
+11. 事件传递过程是由外向内的，即事件总是先传递给父元素，然后再由父元素分发给子View，通过requestDisallow
+
+# Activity事件分发
+当一个点击操作发生时，事件最先传递给当前的Activity，由Activity的dispatchTouchEvent来进行事件分发，具体的工作室由Activity内部的Window来完成的。Window会将事件传递给decor view，decor view一般就是当前界面的底层容器，即setContentView所设置的View父容器，通过Activity.getWindow.getDecorView()可以获得。
+
+```
+/**
+* Called to process touch screen events.  You can override this to
+* intercept all touch screen events before they are dispatched to the
+* window.  Be sure to call this implementation for touch screen events
+* that should be handled normally.
+*
+* @param ev The touch screen event.
+*
+* @return boolean Return true if this event was consumed.
+*/
+public boolean dispatchTouchEvent(MotionEvent ev) {
+    if (ev.getAction() == MotionEvent.ACTION_DOWN) {
+        onUserInteraction();
+    }
+    if (getWindow().superDispatchTouchEvent(ev)) {
+        return true;
+    }
+    return onTouchEvent(ev);
+}
+```
+Window#superDispatchTouchEvent方法是一个抽象方法，它只在android.policy,PhoneWindow中实现了：
+
+```
+public boolean superDispatchTouchEvent(MotionEvent event) {
+    return mDecor.superDispatchTouchEvent(event);
+    //直接传递给了decorView处理了
+}
+```
+
+# 顶级View对点击事件的分发
+如果顶级ViewGroup拦截事件即onInterceptTouchEvent返回true，则事件由ViewGroup处理，这时如果ViewGroup的MOnTouchListener，则onTouch会被调用，否则onTouchEvent会被调用。也就是说，`onTouch会屏蔽掉onTouchEvent`。在onTouchEvent中，如果设置了MOnClickListener，则onClick会被调用。如果顶级ViewGroup不拦截事件，则事件会传递给它所在的点击事件链上的子View，这时子View的dispatchTouchEvent会被调用。
