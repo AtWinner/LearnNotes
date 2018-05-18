@@ -75,3 +75,5 @@ public boolean superDispatchTouchEvent(MotionEvent event) {
 
 # 顶级View对点击事件的分发
 如果顶级ViewGroup拦截事件即onInterceptTouchEvent返回true，则事件由ViewGroup处理，这时如果ViewGroup的MOnTouchListener，则onTouch会被调用，否则onTouchEvent会被调用。也就是说，`onTouch会屏蔽掉onTouchEvent`。在onTouchEvent中，如果设置了MOnClickListener，则onClick会被调用。如果顶级ViewGroup不拦截事件，则事件会传递给它所在的点击事件链上的子View，这时子View的dispatchTouchEvent会被调用。
+
+![事件分发](http://oi9a3yd8k.bkt.clouddn.com/dispatchTouchEvent.png)
