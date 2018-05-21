@@ -74,6 +74,18 @@ public boolean superDispatchTouchEvent(MotionEvent event) {
 ```
 
 # 顶级View对点击事件的分发
-如果顶级ViewGroup拦截事件即onInterceptTouchEvent返回true，则事件由ViewGroup处理，这时如果ViewGroup的MOnTouchListener，则onTouch会被调用，否则onTouchEvent会被调用。也就是说，`onTouch会屏蔽掉onTouchEvent`。在onTouchEvent中，如果设置了MOnClickListener，则onClick会被调用。如果顶级ViewGroup不拦截事件，则事件会传递给它所在的点击事件链上的子View，这时子View的dispatchTouchEvent会被调用。
+如果顶级ViewGroup拦截事件即onInterceptTouchEvent返回true，则事件由ViewGroup处理，这时如果ViewGroup的MOnTouchListener，则onTouch会被调用，否则onTouchEvent会被调用。也就是说，`onTouch会屏蔽掉onTouchEvent`。在onTouchEvent中，如果设置了mOnClickListener，则onClick会被调用。如果顶级ViewGroup不拦截事件，则事件会传递给它所在的点击事件链上的子View，这时子View的dispatchTouchEvent会被调用。
 
-![事件分发](http://oi9a3yd8k.bkt.clouddn.com/dispatchTouchEvent.png)
+![事件分发传递过程](http://oi9a3yd8k.bkt.clouddn.com/dispatchTouchEvent.png)
+
+```
+// Handle an initial down.
+if (actionMasked == MotionEvent.ACTION_DOWN) {
+    // Throw away all previous state when starting a new touch gesture.
+    // The framework may have dropped the up or cancel event for the previous gesture
+    // due to an app switch, ANR, or some other state change.
+    cancelAndClearTouchTargets(ev);
+    resetTouchState();
+}
+```
+onInterceptTouchEvent不是每次事件都会被调用，如果我们想提前处理所有的点击事件，要选择dispatchTouchEvent方法，只有这个方法能确保每次都会调用，当然前提是事件能够传递到当前ViewGroup
