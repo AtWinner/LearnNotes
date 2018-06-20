@@ -44,7 +44,7 @@ public boolean onInterceptTouchEvent(MotionEvent event) {
 ## 内部拦截法
 是指父容器不拦截任何事件，所有的事件都传递给子元素，如果子元素需要此事件就直接消耗掉，否则就交由父容器进行处理，这种方法和Android中的事件分发机制不一致，需要配合requestDisallowInterceptTouchEvent方法才能正常工作，使用起来比较外部拦截法比较复杂，我们需要首先重写子元素的dispatchTouchEvent方法：
 
-```
+``` java
 public boolean dispatchTouchEvent(MotionEvent event) {
     int x = (int) event.getX();
     int y = (int) event.getY();
