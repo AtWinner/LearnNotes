@@ -433,7 +433,7 @@ setChildFrame中的width和height实际上就是子元素的测量宽高。
         return mBottom - mTop;
     }
 ```
-从getWidth和getHeight的源码来看，getWidth的返回值刚好就是View的测量宽高，而getHeight方法的返回值也刚好就是View的测量宽高，++在View的默认实现中，View的测量宽高形成于View的layout过程，即两者的赋值时机不同，测量宽高的赋值时机稍微早一些，因此在日常开发中，我们可以认为View的测量宽高就等于最终宽高，但是得去额存在某些特殊情况导致两者不一致++
+从getWidth和getHeight的源码来看，getWidth的返回值刚好就是View的测量宽高，而getHeight方法的返回值也刚好就是View的测量宽高，**在View的默认实现中，View的测量宽高形成于View的layout过程，即两者的赋值时机不同，测量宽高的赋值时机稍微早一些，因此在日常开发中，我们可以认为View的测量宽高就等于最终宽高，但是得去额存在某些特殊情况导致两者不一致**
 
 如果重写View的layout方法：
 
