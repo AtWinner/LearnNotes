@@ -92,7 +92,7 @@ View的measure过程是由measure方法来完成的，measure方法是一个fina
 ```
 ViewGroup在measure时会对每个子元素进行measure，measureChild这个方法的实现也很好理解：
 
-``` Java
+``` java
     /**
      * Ask one of the children of this view to measure itself, taking into
      * account both the MeasureSpec requirements for this view and its padding.
@@ -133,7 +133,7 @@ ViewGroup没有定义其测量的具体过程，这是因为ViewGroup是一个�
 
 系统会遍历子元素并对每个子元素执行measureChildBeforeLayout方法，这个方法内部会调用子元素的measure方法，这样各个子元素就开始一次进入measure过程，并且系统会通过oTotalLength这个变量来储存LinearLayout在竖直方向的初步高度。每测量一个子元素，mTotalLength就会增加，增加的部分主要包括了子元素的高度以及子元素在竖直方向上的margin等。当子元素测量完毕之后，LinearLayout就会测量自己的大小。针对竖直的LinearLayout而言，它在水平方向的测量过程遵循View的测量过程，在竖直方向的测量过程和View有所不同，如果它的高度采用match_parent或者具体数字，那么它的测量过程和View是一致的，即高度为specSize；如果它的布局中高度采用wrap_content，那么它的高度是所有子元素占用的高度总和，但是仍然不能超过它的父容器的剩余空间，那么它的最终高度需要考虑其在竖直方向的padding。
 
-``` Java
+``` java
     public static int resolveSizeAndState(int size, int measureSpec, int childMeasuredState) {
         final int specMode = MeasureSpec.getMode(measureSpec);
         final int specSize = MeasureSpec.getSize(measureSpec);
@@ -355,7 +355,7 @@ layout方法的大致流程如下：
 setChildFrame中的width和height实际上就是子元素的测量宽高。
 
 
-```
+``` java
     //View的setFrame
     protected boolean setFrame(int left, int top, int right, int bottom) {
         boolean changed = false;
@@ -452,7 +452,7 @@ draw过程比较简单，遵循如下规则：
 1. 绘制装饰
 
 
-``` Java
+``` java
     public void draw(Canvas canvas) {
         final int privateFlags = mPrivateFlags;
         final boolean dirtyOpaque = (privateFlags & PFLAG_DIRTY_MASK) == PFLAG_DIRTY_OPAQUE &&
