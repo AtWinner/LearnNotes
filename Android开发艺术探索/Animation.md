@@ -129,7 +129,7 @@ public class LinearInterpolator extends BaseInterpolator implements NativeInterp
 ```
 很显然，线性插值器的返回值和输入值一样，因此插值器返回的值是0.5，这意味着x的改变时0.5，这个时候插值器的工作就完成了。具体x编程什么值，需要估值器来确实，看下整形估值器算法的源码：
 
-```
+``` java
 public class IntEvaluator implements TypeEvaluator<Integer> {
 
     /**
