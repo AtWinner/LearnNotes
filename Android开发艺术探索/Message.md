@@ -130,7 +130,7 @@ ThreadLocal的值在table数组中的存储位置总是为ThreadLocal的referenc
 # 消息队里工作原理
 MessageQueue主要包含两个操作，插入和读取，读取操作本身就伴随着删除操作，插入和读取对应的方法分别是enqueueMessage和next，其中enqueueMessage的作用是往消息队列插入一条消息。尽管MessageQueue叫消息队列，但是它的内部并不是一个队列，实际上它是一个单链表的数据结构来维护的消息队列，单链表在插入和删除上比较有优势。
 
-```
+``` java
     boolean enqueueMessage(Message msg, long when) {
         if (msg.target == null) {
             throw new IllegalArgumentException("Message must have a target.");
@@ -186,8 +186,7 @@ MessageQueue主要包含两个操作，插入和读取，读取操作本身就�
     }
 ```
 
-```
-
+``` java
     Message next() {
         // Return here if the message loop has already quit and been disposed.
         // This can happen if the application tries to restart a looper after quit
@@ -308,7 +307,7 @@ private Looper(boolean quitAllowed) {
 
 我们知道，Handler的工作需要Looper，没有Looper的线程就会报错，那么如何为一个线程创建Looper呢？使用Looper.prepare()，接着需要调用Looper.loop();Looper除了prepare方法外，还提供了prepareMainLooper方法，这个方法主要是给主线程也就是ActivityThread创建Looper使用的，其本质也是通过prepare方法来实现的。由于主线程的Looper比较特殊，所以Looper提供了一个getMainLooper方法，通过它可以在任何地方获取到主线程的Looper。Looper也是可以退出的，Looperr提供了quit和quitSafely来退出一个Looper。Looper退出后，通过Handler发送的消息会是失败，这个时候Handler的send方法会返回false。在子线程中，如果手动为其创建了Looper，那么在所有的事情完成以后应该调用quit方法来终止消息循环，否则这个子线程会一直处于等待状态，如果退出Looper以后，这个线程就会立刻停止。
 
-```
+``` java
     public static void loop() {
         final Looper me = myLooper();
         if (me == null) {
