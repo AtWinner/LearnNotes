@@ -18,7 +18,7 @@ ThreadLocal是一个线程内部的数据存储类，通过它可以在指定的
 private ThreadLocal<Boolean> threadLocal = new InheritableThreadLocal<>();
 ```
 
-```
+``` java
 protected void onCreate(Bundle savedInstanceState) {
     threadLocal.set(true);
     Log.i("MainThread threadLocal ", threadLocal.get() + "");
