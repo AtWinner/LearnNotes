@@ -19,5 +19,5 @@
 - [《Android开发艺术探索》之Android性能优化](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Android-performance-optimize.md)
 
 ## 《深入理解JVM》学习笔记
-- [Java内存区域和内存溢出异常](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Android-performance-optimize.md)
+- [Java内存区域和内存溢出异常](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/Memory-OOM.md)
 
