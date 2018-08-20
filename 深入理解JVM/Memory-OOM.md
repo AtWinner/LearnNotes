@@ -90,14 +90,14 @@
 
 如果说收集算法是内存回收的方法论，那么垃圾收集器就是内存回收的具体实现。Java虚拟机规范中对垃圾收集器应该如何实现并没有任何规定，因此不同的厂商、不同版本的虚拟机所提供的垃圾收集器都可能会有很大差别，并且一般都会提供参数供用户根据自己的应用特点和要求组合出各个年代所使用的收集器。这里讨论的收集器基于JDK1.7 Update14之后的HotSpot虚拟机，在这个版本中正式提供了商用的G1收集器，这个虚拟机包含的所有收集器如下
 
-![HotSpot虚拟机垃圾收集器](http://oi9a3yd8k.bkt.clouddn.com/HotSpot-JVM-GC.png)
+![HotSpot虚拟机垃圾收集器](http://upload-images.jianshu.io/upload_images/3610640-4e6a6fc9c90f5c06.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 
 图中展示了7种不同分代的收集器，如果两个收集器之间存在连线，就说明他们可以搭配使用。虚拟机所处的区域，则表示它是属于新生代还是老年代的收集器。我们虽然要对各个收集器进行比较，但是并非为了选择一种最好的收集器。因为知道现在为止还没有最好的收集器出现，更加没有万能的收集器，所以我们选择的知识因轨道具体应用场景下最合适的收集器。
 
 ## Serial收集器
 Serial收集器是最基本、发展历史最悠久的收集器，在JDK1.3.1之前是虚拟机新生代收集的唯一选择。看名字就知道，这个收集器是一个单线程的收集器，但它的单线程的意义并不仅仅说明它使用一个CPU或一条收集线程去完成垃圾收集工作，更重要的是在它进行垃圾收集时，必须暂停其他所有的工作线程，知道它收集结束。“Stop the World”这个名字也许听起来很酷，但这项工作实际上是由虚拟机在后台自动发起和自动完成的，在用户不可见的情况下把用户正常工作的线程全部停掉，这对很多应用来说都是难以接受的。图中示意了Serial/Serial Old收集器的运行过程。
 
-![Serial/Serial Old收集器运行示意图](http://oi9a3yd8k.bkt.clouddn.com/Serial-SerialOld.png)
+![Serial/Serial Old收集器运行示意图](http://upload-images.jianshu.io/upload_images/3610640-36beffa075770649.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 
 从JDK1.3开始，一直到现在最新的JDK1.7，HotSpot虚拟机开发团队为清除或者减少工作线程银内存回收而导致停顿的努力一直在进行着，从Serial收集器到Parallel收集器，再到CMS乃至GC收集器的最前沿成果G1收集器，我们看到了一个个越来越优秀的收集器出现，用户线程的收集时间不断缩短，但是仍然没有完全消除。
 
@@ -109,7 +109,7 @@ Serial收集器是最基本、发展历史最悠久的收集器，在JDK1.3.1之
 
 ## ParNew收集器
 ParNew收集器其实就是Serial收集器的多线程版本，除了使用多线程进行垃圾收集之外，其余行为包括Serial收集器可用的所有控制参数、收集算法、Stop the World、对象分配规则、回收策略等都与Serial收集器完全一样，在实现上，这两个收集器也公用了相当多的代码。
-![PerNew/Serial Old收集器运行示意图](http://oi9a3yd8k.bkt.clouddn.com/pernew.png)
+![PerNew/Serial Old收集器运行示意图](http://upload-images.jianshu.io/upload_images/3610640-7b7970acf3d94787.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 ParNew收集器除了多线程收集之外，其他与Serial收集器相比并没有太多创新之处，但它却是很多运行在Server模式下虚拟机中首选的新生代收集器，其中有一个与性能无关但很重要的原因是，除了Serial收集器外，目前只有它能与CMS收集器配合工作。在JDK1.5时期，HotSpot推出了一款在强交互中几乎可任务有划时代意义的垃圾收集器，CMS收集器，这款收集器是HotSpot虚拟机中第一款真正意义上的并发收集器，它第一次实现了让垃圾收集线程与用户线程同时工作。
 
 不幸的是，CMS作为老年代的收集器，无法与JDK1.4.0中存在的新生代收集器Parallel Scavenge配合工作，所以在JDK1.5中使用CMS来手机老年代的时候，新生代只能选择ParNew或者Serial收集器中的一个。ParNew收集器也是使用-XX:UseConcMarkSweepGC选项后的默认新生代收集器，也可以使用-XX:UsePerNewGC来强制指定它。
@@ -138,13 +138,13 @@ Parallel Scavenge收集器提供了两个参数用于精确控制吞吐量，分
 Serial Old收集器是Serial收集器的老年版本，它同样是一个单线程收集器，使用“标记-整理”算法。这个收集器的主要意义也是在于给Clinet模式下的虚拟机使用。如果在Server模式下，它主要还有两大用途：
 - 一种是在JDK1.5的版本中与Parallel Scavenge收集器搭配使用，另一种用途就是作为CMS收集器的后背预案，在并发手机发生Concurrent Mode Failure时使用。工作流程如下。
 
-![Serial/Serial Old收集器运行示意图](http://oi9a3yd8k.bkt.clouddn.com/Serial-SerialOld.png)
+![Serial/Serial Old收集器运行示意图](http://upload-images.jianshu.io/upload_images/3610640-a9b2428cdb8333a1.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 ## Parallel Old收集器
 Parallel Old是 Parallel Scavenge收集器的老年代版本，使用多线程和“标记-整理”算法。这个收集器是在JDK1.6中才开始提供的，在此之前，新生代的Parallel Scavenge收集器一直处于比较尴尬的状态。原因是，如果新生代选择了Parallel Scavenge收集器，老年代除了Serial Old收集器外别无选择。由于老年代Serial Old收集器在服务端应用性能上的拖累，使用了Parallel Scavenge收集器也未必能在整体应用上获得吞吐量最大化的效果，由于单线程的老年代收集中无法充分利用服务器多CPU的处理能力，在老年代很大而且硬件比较高级的环境中，这种组合的吞吐量甚至不一定有ParNew+CMS的组合好。
 
 直到Parallel Old收集器的出现后，“吞吐量优先”收集器终于有了比较名副其实的应用组合，在注重吞吐量以及CPU资源敏感的场合，都可以优先考虑Parallel Scavenge+Parallel Old收集器。
 
-![Parallel Scavenge/Parallel Old收集器运行示意图](http://oi9a3yd8k.bkt.clouddn.com/Parallel-Scavenge-Old.png)
+![Parallel Scavenge/Parallel Old收集器运行示意图](http://upload-images.jianshu.io/upload_images/3610640-4e197cdca123df9f.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 
 ## CMS 收集器
 CMS（Concurrent Mark Sweep）收集器是一种以获取最短回收停顿时间为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿的时间最短，给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。
@@ -158,7 +158,7 @@ CMS收集器是基于“标记-清除”算法实现的，它的运作过程相�
 其中，初始标记、重新标记着两个步骤仍然需要“Stop The World”。初始标记仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，并发标记阶段就是进行GC Roots Tracing的过程，而重新标记阶段则是为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短。
 
 由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，MCS收集器的内存回收过程是与用户线程一起并发执行的。
-![Concurrent-Mark-Sweep收集器运行示意图](http://oi9a3yd8k.bkt.clouddn.com/Concurrent-Mark-Sweep.png)
+![Concurrent-Mark-Sweep收集器运行示意图](http://upload-images.jianshu.io/upload_images/3610640-1a3e26c4577e8d00.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 
 CMS是一款优秀的收集器，它的主要优点在名字上应体现出来了：并发手机、低停顿，Sun公司的一些官方文档中也称之为并发低停顿收集器（Concurrent Low Pause Collector）。但是CMS还远没达到完美的程度，以为它有如下3个缺点：
 - CMS收集器对CPU资源非常敏感。其实，面向并发设计的程序都对CPU资源比较敏感。在并发阶段，它虽然不会导致用户线程停顿，但是会因为占用了一部分线程或者CPU资源而导致应用程序变慢，总吞吐量会降低。CMS默认启动的回收线程数量是（CPU数量+3）÷4，也就是当CPU在4个以上时，并发回收时垃圾收集线程不少于25%的CPU资源，并随着CPU数量的增加而下降。但是当CPU不足4个的时候，CMS对用户程序的影响可能会变大，如果本来CPU负载就比较大，还要分出来一半的运算能力去执行收集器线程，就可能导致用户程序的执行速度忽然降低50%，其实也是令人无法接受的。
@@ -186,7 +186,7 @@ G1收集器之所以能建立可预测的停顿时间模型，是因为它可以
 
 G1的前几个步骤的运作过程和CMS有很多相似之处。初始标记阶段仅仅只是标记一下GCRoots能直接关联到的对象，并且修改TAMS（Next Top At Mark Start）的值，让下一阶段用户程序并发运行时，能在正确可用的Region中创建新对象，这阶段需要停顿线程，但耗时很短。并发标记阶段是从GC Roots开始对堆中对象进行可达性分析，找出存活的对象，这阶段耗时较长，但可与用户程序并发执行。而最终标记阶段则是为了修正在并发标记期间因用户程序继续运作而导致标记产生变动的那一部分标记记录，虚拟机将这段时间对象变化记录在线程Remembered Set中，这阶段需要停顿线程，但是可并行执行。最后在筛选回首阶段首先对各个Region的回收价值和成本进行评估排序，根据用户所期望的GC停顿时间来制定回收计划。
 
-![G1收集器运行示意图](http://oi9a3yd8k.bkt.clouddn.com/Garbage-First.png)
+![G1收集器运行示意图](http://upload-images.jianshu.io/upload_images/3610640-1dd99bbc95ad74ec.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 
 ## 垃圾收集器常用参数总结
 - **UseSerialGC**：虚拟机运行在Client模式下的默认值，打开此开关后，使用Serial+Serial Old的收集器组合进行内存回收
@@ -208,7 +208,7 @@ G1的前几个步骤的运作过程和CMS有很多相似之处。初始标记阶
 
 # JVM内存分配与回收策略
 Java技术体系中所提倡的自动内存管理最终都可以归结为自动化地解决了两个问题：
-给对象分配内存以及回收分配给对象的内存。关于内存回收的点，参考[JVM的垃圾收集器](https://www.jianshu.com/p/0311ef69c7f4)
+给对象分配内存以及回收分配给对象的内存。
 
 对象的分配，宏观上讲就是在堆上分配，但也可能经过JIT编译后被拆散为标量类型并间接地栈上分配，对象主要分配在新生代Eden区上，如果启动了本地线程分配缓冲，将线程优先在TLAB上分配。少数情况下可能会直接分配到老年代中，分配的规则并不是百分之百固定的，其细节取决于当前使用的是哪一种垃圾收集器组合，还有虚拟机中与内存相关的参数设置。
 
