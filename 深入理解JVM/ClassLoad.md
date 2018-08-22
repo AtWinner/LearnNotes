@@ -258,4 +258,25 @@ public class Test {
 }
 ```
 - clinit()方法与类的构造函数（或者说实例构造器init()方法）不同，它不需要显式地调用父类构造器，虚拟机会保证在子类的clinit()方法执行之前，父类的clinit()方法已经执行完毕。因此在虚拟机中第一个被执行的clinit()方法的类肯定是java.lang.Object。
-- 由于父类的clinit()方法先执行，也就意味着父类
+- 由于父类的clinit()方法先执行，也就意味着父类中定义的静态语句块要优于子类的变量赋值操作，如下代码中所示：
+``` java
+static class Parent {
+    public static int A = 1;
+    static {
+        A = 2;
+    }
+}
+
+static class Sub extends Parent {
+    public static int B = A;
+}
+
+public static void main(String[] args) {
+    System.out.println(Sub.B);
+}
+```
+- clinit()方法对于类或接口来说并不是必须的，如果一个类中没有静态语句块，也没有对变量的赋值操作，那么编译期可以不为这个类生成clinit()方法。
+- 接口不能使用静态语句块，但仍然有变量初始化的操作，因此接口与类一样都会生成clinit()方法。但接口与类不同的是，执行接口的clinit()方法不需要先执行父接口clinit()方法。只有当父接口中定义的变量使用时，父接口才会初始化。另外，接口的实现类在初始化时也是一样不会执行接口的clinit()方法。
+- 虚拟机会保证一个类clinit()方法在多线程环境中被正确地加锁、同步，如果多个线程同时去初始化一个类，那么只会有一个线程去执行这个类的clinit()方法，其他线程都需要阻塞等待，直到活动线程执行clinit()方法完毕。如果在一个类的clinit()方法中有耗时很长的操作，就可能造成多个进程阻塞，在实际应用中这种阻塞往往是很隐蔽的。代码如下：
+
+
