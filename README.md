@@ -1,24 +1,24 @@
-# Ñ§Ï°±Ê¼Ç
+# å­¦ä¹ ç¬”è®°
 
-## ¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ñ§Ï°±Ê¼Ç
+## ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹å­¦ä¹ ç¬”è®°
 
 
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®IPC](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/IPC.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®ViewÊÂ¼şÌåÏµ£¨»ù´¡ÖªÊ¶£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View1.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®ViewÊÂ¼şÌåÏµ£¨View»¬¶¯£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View2-Scroll.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®ViewÊÂ¼şÌåÏµ£¨ÊÂ¼ş·Ö·¢£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View3-DispatchTouchEvent.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®ViewÊÂ¼şÌåÏµ£¨»¬¶¯³åÍ»£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View4-ScrollConflict.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®View¹¤×÷Ô­Àí£¨ViewRootºÍDecorView£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/ViewWork1-ViewRoot-DecorView.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®View¹¤×÷Ô­Àí£¨MeasureSpec£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/ViewWork2-MeasureSpec.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®View¹¤×÷Ô­Àí£¨View¹¤×÷Á÷³Ì£©](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/ViewWork3-ViewWork.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®Android¶¯»­](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Animation.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®ËÄ´ó×é¼şÔËĞĞ×´Ì¬](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Components1.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®Activity¹¤×÷Ô­Àí](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Components2-Activity.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®AndroidÏûÏ¢»úÖÆ](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Message.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®AndroidÏß³ÌºÍÏß³Ì³Ø](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Android-Thread.md)
-- [¡¶Android¿ª·¢ÒÕÊõÌ½Ë÷¡·Ö®AndroidĞÔÄÜÓÅ»¯](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Android-performance-optimize.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹IPC](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/IPC.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewäº‹ä»¶ä½“ç³»ï¼ˆåŸºç¡€çŸ¥è¯†ï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View1.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewäº‹ä»¶ä½“ç³»ï¼ˆViewæ»‘åŠ¨ï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View2-Scroll.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewäº‹ä»¶ä½“ç³»ï¼ˆäº‹ä»¶åˆ†å‘ï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View3-DispatchTouchEvent.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewäº‹ä»¶ä½“ç³»ï¼ˆæ»‘åŠ¨å†²çªï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/View4-ScrollConflict.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewå·¥ä½œåŸç†ï¼ˆViewRootå’ŒDecorViewï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/ViewWork1-ViewRoot-DecorView.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewå·¥ä½œåŸç†ï¼ˆMeasureSpecï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/ViewWork2-MeasureSpec.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Viewå·¥ä½œåŸç†ï¼ˆViewå·¥ä½œæµç¨‹ï¼‰](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/ViewWork3-ViewWork.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹AndroidåŠ¨ç”»](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Animation.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹å››å¤§ç»„ä»¶è¿è¡ŒçŠ¶æ€](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Components1.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Activityå·¥ä½œåŸç†](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Components2-Activity.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Androidæ¶ˆæ¯æœºåˆ¶](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Message.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Androidçº¿ç¨‹å’Œçº¿ç¨‹æ± ](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Android-Thread.md)
+- [ã€ŠAndroidå¼€å‘è‰ºæœ¯æ¢ç´¢ã€‹ä¹‹Androidæ€§èƒ½ä¼˜åŒ–](Android%E5%BC%80%E5%8F%91%E8%89%BA%E6%9C%AF%E6%8E%A2%E7%B4%A2/Android-performance-optimize.md)
 
-## ¡¶ÉîÈëÀí½âJVM¡·Ñ§Ï°±Ê¼Ç
-- [JavaÄÚ´æÇøÓòºÍÄÚ´æÒç³öÒì³£](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/Memory-OOM.md)
-- [JVMÀ¬»øÊÕ¼¯Æ÷](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/JVM-GC.md)
+## ã€Šæ·±å…¥ç†è§£JVMã€‹å­¦ä¹ ç¬”è®°
+- [Javaå†…å­˜åŒºåŸŸå’Œå†…å­˜æº¢å‡ºå¼‚å¸¸](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/Memory-OOM.md)
+- [JVMåƒåœ¾æ”¶é›†å™¨](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/JVM-GC.md)
 
