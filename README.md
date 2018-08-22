@@ -21,4 +21,5 @@
 ## 《深入理解JVM》学习笔记
 - [Java内存区域和内存溢出异常](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/Memory-OOM.md)
 - [JVM垃圾收集器](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/JVM-GC.md)
+- [JVM类加载机制](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/ClassLoad.md)
 
