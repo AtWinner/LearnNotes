@@ -279,4 +279,99 @@ public static void main(String[] args) {
 - 接口不能使用静态语句块，但仍然有变量初始化的操作，因此接口与类一样都会生成clinit()方法。但接口与类不同的是，执行接口的clinit()方法不需要先执行父接口clinit()方法。只有当父接口中定义的变量使用时，父接口才会初始化。另外，接口的实现类在初始化时也是一样不会执行接口的clinit()方法。
 - 虚拟机会保证一个类clinit()方法在多线程环境中被正确地加锁、同步，如果多个线程同时去初始化一个类，那么只会有一个线程去执行这个类的clinit()方法，其他线程都需要阻塞等待，直到活动线程执行clinit()方法完毕。如果在一个类的clinit()方法中有耗时很长的操作，就可能造成多个进程阻塞，在实际应用中这种阻塞往往是很隐蔽的。代码如下：
 
+``` java
+public class Main {
+    public static void main(String[] args) {
+        Runnable script = new Runnable() {
+            @Override
+            public void run() {
+                System.out.println(Thread.currentThread() + " start");
+                DeadLoopClass main = new DeadLoopClass();
+                System.out.println(Thread.currentThread() + " run over");
+            }
+        };
+        Thread thread1 = new Thread(script);
+        Thread thread2 = new Thread(script);
+        thread1.start();
+        thread2.start();
+    }
 
+    static class DeadLoopClass {
+        static {
+            //如果不加上if语句，编译期将提示“Initializer does not complete normally”并拒绝编译
+            if (true) {
+                System.out.println(Thread.currentThread() + "init DeadLoopClass");
+                while (true) {
+
+                }
+            }
+        }
+    }
+}
+```
+运行结果如下，即一条线程在死循环以长时间操作，另外一条线程在阻塞等待。
+
+![运行结果](http://oi9a3yd8k.bkt.clouddn.com/class-load-run-result.png)
+
+# 类加载器
+虚拟机设计团队把类加载阶段中的“通过一个类的全限定名在获取描述此类的二进制字节流”这个动作放在JVM外部去实现，以便让应用应用程序自己决定如何去获取所需要的类，实现这个动作的代码模块称为“类加载器”。
+
+类加载器是Java语言的一项创新，也是Java语言流行的重要原因之一，它最初是为了满足Java Applet的需求而开发出来的。虽然目前Java Applet技术基本上应死掉了，但是类加载器却在类层次划分，OSGi、热部署、代码加密等领域大放异彩，成为了Java技术体系中一块重要的基石，**可谓失之桑榆，收之东隅**。
+
+## 类与类加载器
+类加载器虽然只用于实现类的加载动作，但它在Java程序中起到的作用却远远不限于类加载阶段，对于任意一个类，都需要又加载它的类加载器和这个类本身一同确立其在JVM中的唯一性，每一个加载器，都拥有一个独立的类命名空间。这句话可以表达的更通俗一些：比较两个类是否“相等”，只有在这两个类是由同一个类加载器加载的前提下才有意义，否则，即时这两个类来源于同一个Class文件，被同一个虚拟机加载，只要加载它们的类加载器不同，那这两个类就必定不相等。
+
+这里指的“相等”包括代表类的Class对象的equals()方法、isAssignableFrom()方法、isInstance()方法的返回结果，也包括使用instanceof关键字做对象所属关系判定等情况。如果没有注意到类加载器的影响，在某些情况下可能会产生具有迷惑性的结果。
+``` java
+public class Main {
+    public static void main(String[] args) throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+        ClassLoader myLoader = new ClassLoader() {
+            @Override
+            public Class<?> loadClass(String name) throws ClassNotFoundException {
+                String fileName = name.substring(name.lastIndexOf(".") + 1) + ".class";
+                System.out.println(fileName);
+                InputStream is = getClass().getResourceAsStream(fileName);
+                if (is == null) {
+                    return super.loadClass(name);
+                }
+                try {
+                    byte[] b = new byte[is.available()];
+                    is.read(b);
+                    return defineClass(name, b, 0, b.length);
+                } catch (IOException e) {
+                    throw new ClassNotFoundException(name);
+                }
+            }
+        };
+        Object obj = myLoader.loadClass("Main").newInstance();
+        System.out.println(obj.getClass());
+        System.out.println(obj instanceof Main);
+    }
+}
+```
+运行结果:
+```
+class Main
+false
+```
+上面构造了一个简单的类加载器，尽管很简单，但是对于这个演示来说还是够用的。它可以加载与自己在同一路径下的Class文件。我们使用这个类加载器去加载了一个名为“Main”的类，并实例化了这个类的对象。两行输出结果中，从第一句可以看出，这个对象确实是类Main实例化出来的对象，但是从第二句就可以发现，这个对象与类Main所属类型检查的时候却返回了false，这是因为虚拟机中存在两个Main类，一个是由新途观应用程序加载器加载的，另外一个是由我们自定义的类加载器加载的，虽然两个来自同一个Class文件，但依然是两个独立的类，做对象所属类型检查时结果自然是false。
+
+## 双亲委派模型
+从JVM的角度来讲，只存在两种不同的类加载器：一种是启动类加载器（Bootstrap ClassLoader），这个加载器使用C++语言实现，是虚拟机自身的一部分；另一种就是所有其他的类加载器，这些类加载器是Java语言实现的，并且全都继承自抽象类java.lang.ClassLoader。
+
+从Java开发人员的角度来看，类加载器还可以被划分的更细致，绝大部分Java程序都会使用到以下3种由系统提供的类加载器。
+- 启动类加载器（Bootstrap ClassLoader）：前面已经介绍过，这个类加载器负责将存放在JAVA_HOME\lib目录总的，或者被-Xbootclasspath参数所指定的路径中的，并且是虚拟机识别的（仅按照文件名识别，入rt.jar，名字不符合的类库即使放在lib目录也不会被加载）类库加载到虚拟机内存中。启动类加载类无法被Java程序直接引用，用户在编写自定义类加载器时，如果需要把加载请求为派给引导类加载器，那直接使用null代替即可，如下所示：
+``` java
+public ClassLoader getClassLoader() {
+    ClassLoader cl = getClassLoader0();
+    if (cl == null)
+        return null;
+    SecurityManager sm = System.getSecurityManager();
+    if (sm != null) {
+        ClassLoader.checkClassLoaderPermission(cl, Reflection.getCallerClass());
+    }
+    return cl;
+}
+```
+- 扩展类加载器（Extension ClassLoader）：这个加载器由sun.misc.Launcher$ExtClassLoader实现，它负责加载JAVA_HOME\lib\ext目录中的，或者被java.ext.dirs系统变量所指定的路径中的所有类库，开发者可以直接使用扩展类加载器。
+- 应用程序类加载器（Application ClassLoader）：
