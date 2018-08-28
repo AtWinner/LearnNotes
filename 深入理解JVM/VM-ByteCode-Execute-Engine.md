@@ -308,5 +308,81 @@ son choose qq
 
 按照目前Java语言的发展趋势，它并没有直接变为动态语言的迹象，而是通过内置动态语言（如JavaScript）执行引擎的方式来满足动态性的需求。但是JVM层面上并不是如此的，在JDK1.7中已经开始提供对动态语言的支持了，JDK1.7中新增的invokedynamic指令也成为了最复杂的一条方法调用的字节码指令，稍后笔者将专门讲解这个JDK1.7的新特性。
 
+### 虚拟机动态分派的实现
+前面介绍的分派过程，作为对虚拟机概念模型的解析基本上已经足够了，它已经解决了虚拟机在分派中“会做什么”的这个问题，但是虚拟机“具体如何做到”，可能各种虚拟机实现会有差别。
 
+由于动态分派是非常频繁的动作，而且动态分派的方法版本选择过程需要运行时在类方法元数据中搜索合适的目标方法，因此在虚拟机的时机实现中基于性能的考虑，大部分实现都不会真正的进行如此频繁的搜索。而面对这种情况，最常用的稳定优化手段就是为类在方法区中建立一个虚方法表（Virtual Method Table，也叫itable，于此对应的，在invokeinterface执行时也会用到接口方法表，Interface Method Table，简称itable），使用虚方法表索引来代替元数据查找以提高性能。
 
+虚方法表中存放着各个方法的实际入口地址。如果某个方法在子类中没有被重写，那子类的虚方法表里面的地址入口和父类相同方法的地址入口是一致的，都指向父类的实现入口。如果子类中重写了这个方法，子类方法表中的地址将会被替换为指向子类实现版本入口的地址。
+
+Son重写了来自Father的全部方法，因此Son的方法表没有指向Father类型数据的箭头。但是Son和Father都没有重写来自Object的方法，所以它们的方法表中所有从Object继承来的方法都指向了Object的数据类型。
+
+为了程序实现上的方便，具有相同签名的方法，在父类、子类的虚方法表中都应当具有一样的索引序号， 这样当类型变换时，仅需求变更查找的方法表，就可以从不同的虚方法表中按索引转换出所需的入口地址。
+
+## 动态语言支持
+JVM的字节码指令集的数量从Sun公司的第一款JVM问世至JDK7来临之前的十余年时间里，一直没有发生任何变化。随着JDK7的发布，字节码指令集终于添加了一个新成员，invokedynamic指令。这条心增加的指令是JDK7实现“动态类型语言”支持而进行的改进之一，也是为JDK8可以顺利实现Lambda表达式做技术准备。
+
+### 动态类型语言
+动态类型语言的关键特征是它的类型检查的主题过程是在运行期而不是编译期，满足这个特性的语言有很多，包括：APL、Clojure、Erlang、Groovy、JavaScript、Jython、Lisp、Lua、PHP、Prolog、Python、Ruby、Smalltalk和Tel等。相对于，在编译期就进行类型检查过程的语言（比如C++和Java等）就是最常用的静态类型语言。
+``` java
+public static void main(String[] args) {
+    int[][][] a = new int[1][0][-1];
+}
+```
+这段代码时可以正常编译的，但运行的时候会报NegativeArraySizeException异常。在JVM规范中明确规定了NegativeArraySizeException是一个运行时异常，通俗一点讲，运行时异常就是只要代码不运行到这一行就不会有问题。与运行时异常对应的就是连接时异常，即使会导致连接时异常的代码放在一条无法执行到的分支路径上，类加载时（Java的连接过程不在编译阶段，而在类加载阶段）也照样会跑出异常。
+
+不过C语言会在编译期报错：
+``` c
+int main(void) {
+    int i[1][0][-1];//GCC拒绝编译，报“size of array is negative”
+    return 0;
+}
+```
+
+动态和静态类型语言谁更先进呢？这个不会有确切的答案。
+- 静态类型语言在编译期确定类型，最显著的好处是编译期可以提供严谨的类型检查，这样与类型相关的问题能在编码的时候就及时被发现，利于稳定性以及代码达到更大的规模。
+- 动态类型语言在运行期确定类型，这可以为开发者提供更大的灵活性，某些静态类型语言中需要大量臃肿代码来实现的功能，由动态类型语言来实现可能更加清晰和简洁，也就意味着开发效率的提升。
+
+### JDK1.7与动态类型
+JDK1.7以前的字节码指令集中，4条方法调用指令（invokevirtual、invokespecial、invokestatic、invokeinterface）的第一个参数都是被调用的方法的符号引用（CONSTANT_Methodref_info或者CONSTANT_InterfaceMethodref_info常量），方法的符号引用在编译时产生，而动态类型语言只有在运行期才能确定接受者类型。这样，在JVM上实现的动态类型语言就不得不使用其他方式，比如在编译时留个占位符类型，运行时动态生成字节码实现具体类型到占位符类型的适配来实现，这样会让动态类型语言实现的复杂度增加，也可能带来额外的性能开销。尽管可以利用一些方法让这些开销变小，但这种底层问题终究是应当在虚拟机层次上去解决才最合适，因此在JVM层面上提供动态类型的直接支持就称为了JVM平台的发展趋势之一，这就是JDK1.7中invokedynamic指令以及java.lang.invoke包出现的技术背景。
+
+### java.lang.invoke包
+JDK1.7实现了JSK-292，新加入的java.lang.invoke包就是JSR-292的一个重要组成部分，这个包的目的是在之前单纯依靠符号引用来确定调用的目标方法这种方式以外，提供一种新的动态确定目标方法的机制，称为MethodHandle。拥有MethodHandle之后，Java语言也可以拥有类似函数指针或者委托的方法别名的工具了。
+
+``` java
+public class MethodHandleTest {
+    static class ClassA {
+        public void println(String s) {
+            System.out.println(s);
+        }
+    }
+
+    public static void main(String[] args) throws Throwable {
+        Object obj = System.currentTimeMillis() % 2 == 0 ? System.out : new ClassA();
+        //无论obj最终是哪个实现类，下面这句都能正确调用到println方法
+        getPrintlnMH(obj).invokeExact("sss");
+    }
+
+    private static MethodHandle getPrintlnMH(Object receiver) throws Throwable {
+        /*MethodType：代表方法类型，包含了方法的返回值methodType()的第一个参数和具体参数methodType()第二个及以后的参数。*/
+        MethodType mt = MethodType.methodType(void.class, String.class);
+        /*lookup()方法的作用是在指定类中查找符合给定的方法名称、方法类型，并且符合调用权限的方法句柄
+        因为这里调用的是一个虚方法，按照Java语言的规则，方法第一个参数是隐式的，代表该方法的接收者，也即是this指向的对象，这个参数之前是放在参数列表中传递的，而现在提供了bindTo()方法来完成这件事情*/
+        return MethodHandles.lookup().findVirtual(receiver.getClass(), "println", mt).bindTo(receiver);
+    }
+}
+```
+实际上，getPrintlnMH()方法模拟了invokevirtual指令的执行过程，只不过它的分派逻辑并非固化在Class文件的字节码上，而是通过一个具体方法来实现。而这个方法本身的返回值（MethodHandle对象），可以视作最终调用这个方法的一个“引用”。以此为基础，有了MethodHandle就可以写出类似下面的函数声明：
+``` java
+void sort(List list, MethodHandle methodHandle)
+```
+
+仅仅站在Java的角度来看，MethodHandle的使用方法和效果与Reflection有众多相似之处，但是，它们还有以下这些区别。
+- 从本质上讲，Reflection和MethodHandle机制都是在模拟方法调用，但Reflection是在模拟Java代码层次的方法调用，而MethodHandle是在模拟字节码层次的方法调用，在MethodHandles.lookup中的3个方法——findStatic()、findVirtual()、findSpecial()正是为了对应于invokestatic、invokevirtual & invokeinterface、invokespecial这几条字节码指令的执行权限校验行为，而这些底层细节在使用Reflection API时是不需要关心的。
+- Reflection中的java.lang.reflect.Method对象远比MethodHandle机制中的java.lang.invoke.MethodHandle对象所包含的信息多。前者是方法在Java一端的全面映像，包括方法的签名、描述符以及方法属性表中各个属性的Java端表示方式，还包含执行权限等运行时信息。而后者仅仅包含与执行该方法相关的信息。用通俗的话讲，Reflection是重量级的，MethodHandle是轻量级的。
+- 由于MethodHandle对字节码的方法指令调用的模拟，所以理论上虚拟机在这方面做的各种优化（比如方法内联），在MethodHandle上也应可以采用类似思路去支持（但目前还不完善）。而通过反射区调用方法则不行。
+
+MethodHandle和Reflection除了上面列举的区别外，最关键的一点在于去掉前面的“仅仅站在Java的角度来看”。Reflection的设计目标是只为Java语言服务的，而MethodHandle则设计成可以服务于所有Java虚拟机之上的语言，其中也包括Java语言。
+
+### invokedynamic指令
+从某种程度上讲，invokedynamic指令与MethodHandle机制的作用是一样的，都是为了解决原有4条“invoke*”指令方法分派规则固化在虚拟机之中的问题，把如何查找目标方法的决定权从虚拟机转嫁到具体用户代码之中，让用户有更高的自由度。而且两者的思路也是可类比的，可以把它们想象成为了达到同一个目的，一个采用上层Java代码和API实现，另一个采用字节码和Class中其他属性、常量来完成。因此，如果理解了MethodHandle，那么理解invokedynamic指令也并不难。
