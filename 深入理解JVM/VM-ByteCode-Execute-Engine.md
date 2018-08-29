@@ -386,3 +386,87 @@ MethodHandle和Reflection除了上面列举的区别外，最关键的一点在�
 
 ### invokedynamic指令
 从某种程度上讲，invokedynamic指令与MethodHandle机制的作用是一样的，都是为了解决原有4条“invoke*”指令方法分派规则固化在虚拟机之中的问题，把如何查找目标方法的决定权从虚拟机转嫁到具体用户代码之中，让用户有更高的自由度。而且两者的思路也是可类比的，可以把它们想象成为了达到同一个目的，一个采用上层Java代码和API实现，另一个采用字节码和Class中其他属性、常量来完成。因此，如果理解了MethodHandle，那么理解invokedynamic指令也并不难。
+
+每一处含有invokedynamic指令的位置都称作“动态调用点”（Dynamic CallSite），这条指令的第一个参数不再是代表方法符号应用的CONSTANT_Methodref_info常量，而是变为JDK1.7新加入的CONSTANT_InvokeDynamic_info常量，从这个新常量中可以得到3项信息：引导方法、方法类型和名称。引导方法是由固定的参数，并且返回值是java.long.invoke.CallSite对象，这个代表正要执行的目标方法调用。根据CONSTANT_InvokeDynamic_info常量中提供的信息，虚拟机可以找到并且执行引导方法，从而获得一个CallSite对象，最终调用要执行的目标方法。
+
+``` java
+import java.lang.invoke.*;
+
+public class InvokeDynamicTest {
+    public static void main(String[] args) throws Throwable {
+        INDY_BootstrapMethod().invokeExact("icfenix");
+    }
+
+    public static void testMethod(String s) {
+        System.out.println("hello String:" + s);
+    }
+
+    public static CallSite BootstrapMethod(MethodHandles.Lookup lookup, String name, MethodType mt) throws Throwable {
+        return new ConstantCallSite(lookup.findStatic(InvokeDynamicTest.class, name, mt));
+    }
+
+    private static MethodType MT_BootstrapMethod() {
+        return MethodType.fromMethodDescriptorString("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", null);
+    }
+
+    private static MethodHandle MH_BootstrapMethod() throws Throwable {
+        return MethodHandles.lookup().findStatic(InvokeDynamicTest.class, "BootstrapMethod", MT_BootstrapMethod());
+    }
+
+    private static MethodHandle INDY_BootstrapMethod() throws Throwable {
+        CallSite cs = (CallSite) MH_BootstrapMethod().invokeWithArguments(MethodHandles.lookup(), "testMethod",
+                MethodType.fromMethodDescriptorString("(Ljava/lang/String;)V", null));
+        return cs.dynamicInvoker();
+    }
+}
+```
+这段代码与前面的MethodHandleTest的作用基本上是一样的，由于invokedynamic指令所面向的使用者并非是Java语言，而是其他Java虚拟机之上的动态语言，因此仅仅依靠Java语言的编译器Javac没有办法生成invokedynamic指令的字节码，曾经有一个java.dyn.InvokeDynamic的语法糖可以实现，后来被取消了，所以要使用Java语言来演示invokedynamic指令只能用一些变通的办法。
+
+### 掌握方法分派规则
+invokedynamic指令与前面的“invoke*”指令的最大差别就是它的分派逻辑不是由虚拟机决定的，而是由程序员决定的。
+
+在Java程序中，可以通过super关键字很方便的调用到父类的方法，但是如果要访问祖类的方法呢？
+
+在JDK1.7之前，使用纯粹的Java语言很难处理这个问题，直接生成字节码就很简单，如使用ASM等字节码工具，原因在于子类方法无法获取一个实际类型是祖类的对象引用，而invokevirtual指令的分派逻辑就是按照方法接收者的时机类型进行分派，这个逻辑是固化在虚拟机中的，程序员无法改变。可以使用如下逻辑解决这个问题。
+
+``` java
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
+
+public class GrandTest {
+    static class GrandFather {
+        void thinking() {
+            System.out.println("GrandFather");
+        }
+    }
+
+    static class Father extends GrandFather {
+        void thinking() {
+            System.out.println("Father");
+        }
+    }
+
+    static class Son extends Father {
+        void thinking() {
+            System.out.println("Son");
+            try {
+                MethodType mt = MethodType.methodType(void.class);
+                Field IMPL_LOOKUP = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
+                IMPL_LOOKUP.setAccessible(true);
+                MethodHandles.Lookup lkp = (MethodHandles.Lookup) IMPL_LOOKUP.get(null);
+                MethodHandle h1 = lkp.findSpecial(GrandFather.class, "thinking", mt, GrandFather.class);
+                h1.invoke(this);
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        new GrandTest.Son().thinking();
+    }
+}
+
+```
