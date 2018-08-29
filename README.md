@@ -23,4 +23,5 @@
 - [JVM垃圾收集器](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/JVM-GC.md)
 - [JVM类加载机制](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/ClassLoad.md)
 - [虚拟机字节码执行引擎](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/VM-ByteCode-Execute-Engine.md)
+- [Java中的语法糖](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/Java-Syntactic-Sugar.md)
 
