@@ -74,5 +74,117 @@ Java HotSpot(TM) 64-Bit Server VM (build 25.66-b18, compiled mode)
 如果不做任何限制，方法调用计数器统计的并不是方法被调用的绝对次数，而是一个相对的执行频率，即一段时间之内方法被调用的次数。当超过一定的时间限度，如果方法的调用次数仍然不足以让它提交给即时编译器编译，那这个方法的调用计数器会被减少一半，这个过程称为方法调用计数器热度的衰减，而这段时间就称为此方法统计的半衰期（Counter Half Life Time）。进行热度衰减的动作是在虚拟机进行垃圾收集时顺带进行的，可以使用虚拟机参数-XX:-UseCounterDecay来关闭热度衰减，让方法计数器统计方法调用的绝对次数，这样，只要系统运行时间足够长，绝大多数方法都会被编译成本地代码。另外，可以使用-XX:CounterHalfLifeTime参数设置半衰周期的时间，时间是秒。
 
 ### 回边计数器
+虽然HotSpot虚拟机也提供了一个类似于方法调用计数器阈值-XX:CompileThreshold的参数-XX:BackEdgeThreshold供用户设置，但是当前的虚拟机实际上并未使用此参数，因此我们需要设置另外一个参数-XX:OnStackReplacePercentage来间接调整回边计数器的阈值，其计算公式如下
+- 虚拟机运行在Client模式下，回边计数器阈值计算公式为：方法调用计数器阈值×OSR比率÷100。其中，OSR比率（OnStackReplacePercentage）默认值为933，如果都去默认值，那Client模式虚拟机的回边计数器的阈值就是13995。
+- 虚拟机运行在Server模式下，回边计数器阈值的计算公式为：方法计数器阈值×（OSR比率-解释器监控比率）÷100.其中OSR比率默认值为140，解释器监控比率（InterpreterProfilePercentage）默认值为33，如果都是默认值，Server模式虚拟机回边计数器的阈值为10700。
+
+当解释器遇到一条回边指令时，会先查找要执行的代码片段是否有已经编译好的版本，如果有，它将会优先执行已经编译的代码，否则就把回边计数器的值加1，然后判断方法调用计数器与回边计数器的阈值。当超过阈值的时候，将会提交一个OSR请求，并且把回边计数器的值降低一些，以便在解释器中执行循环，等待编译器输出编译结果，整个过程如下所示：
 
 ![回边计数器触发即时编译](https://upload-images.jianshu.io/upload_images/3610640-efd159501af07583.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+与方法计数器不同，回边计数器没有计数热度衰减的过程，因此这个计数器统计的就是该方法循环执行的绝对次数。当方法溢出的时候，它还会把方法计数器的值调整到溢出状态，这样下次进入该方法的时候就会执行标准编译过程。
+
+需要注意的是，上面的两张流程图展示的都仅仅是ClientVM的即时编译方式，对于ServerVM来说，执行情况会比上面的描述更复杂一些。
+
+## 编译过程
+在默认设置下，无论是方法调用产生的即时编译请求，还是OSR编译请求，虚拟机在代码编译器还未完成之前，都任然按照解释方式继续执行，而编译动作则在后台的编译线程中进行，用户可以通过参数-XX:-BackgroundCompilation来禁止后台编译，在禁止后台编译后，一旦达到JIT的编译条件，执行线程向虚拟机提交编译器输出的本地代码。
+
+在后台执行编译的过程中，Server Compiler和Client Compiler两个编译器的编译过程是不一样的。对于ClientCompiler来说，它是一个简单快速的三段式编译器你，主要的关注点在于局部性的优化，而放弃了许多耗时较长的全局优化手段。
+
+在第一阶段，一个平台独立的前端将字节码构造成一种高级中间代码表示（High-Level Intermediate Representation， HIR）。HIR使用的静态单分派（Static Single Assignment， SSA）的形式来代表代码值，这可以使得一些在HIR的构造过程之中和之后进行的优化动作更容易实现。在此之前编译器会在字节码上完成一部分基础优化，如方法内联、常量传播等优化将会在字节码被构造成HIR之前完成。
+
+在第二阶段，一个平台相关的后端从HIR中产生低级中间代码表示（Low-Level Intermediate Representation， LIR），在此之前会在HIR上完成另外一些优化，如空值检查消除、范围检查消除等，以便让HIR达到更高效的代码表示形式。
+
+最后阶段是在平台相关的后端使用线性扫描算法（Linear Scan Register Allocation）在LIR上分配寄存器，并在LIR上做窥孔（Peephole）优化，然后产生机器代码。Client Compiler的大致执行过程如图：
+
+![Client Compiler架构](https://upload-images.jianshu.io/upload_images/3610640-26265ebe021d349c.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+而ServerCompiler则是专门面向服务端的典型应用并为服务端的性能配置特别调整过的编译器，也是一个充分优化过的高级编译器，几乎能达到GNU C\+\+编译器使用-O2参数时的优化轻度，它会执行所有经典的优化动作，如无用代码消除（Dead Code Elimination）、循环展开（Loop Unrolling）、循环表达式外提（Loop Expression Hoisting）、消除公共子表达式（Common Subexpression Elimination）、常量传播（Constant Propagation）、基本块重排序（Basic Block Reordering）等，还会实施一些与Java语言特性密切相关的优化技术，如范围检查消除（Range Check Elimination）、空值检查消除（Null Check Elimination，不过并非所有的空值检查消除都是依赖编译器优化的，有一些是在代码过程中自动优化了）等。另外，如守护内联（Guarded Inlining）、分支频率预测（Branch Frequency Prediction）等。
+
+Server Compiler的寄存器分配器是一个全局图着色分配器，它可以充分利用某些处理架构（如RISC）上的大寄存器集合。以即时编译器的标准来看，Server Compiler无疑是比较缓慢的，但它的编译速度依然远远超过传统的静态优化编译器，而且它相对于Client Compiler编译输出的代码质量有所提高，可以减少本地代码的执行时间，从而抵消了额外的编译时间开销，所以也有很多非服务端的应用选择使用Server模式的虚拟机运行。
+
+## 公共子表达式消除
+公共子表达式小数是一个普遍存在于各种编译器的经典优化技术，它的含义是：如果一个表达式E已经计算过了，并且从先前的计算到现在E中所有变量的值都没有发生变化，那么E的这次出现就称为了公共子表达式。对于这种表达式，没有必要花时间再对它计算，只需要直接用钱买计算过的表达式结果代替E就行了。如果这种优化仅限用程序的基本块内，便称为局部公共子表达式消除（Local Common Subexpression Elimination），如果这种优化的范围覆盖了多个基本块，那就称为全局公共子表达式消除（Global Common Subexpression Elimination）。举个例子说明它的优化过程，假设存在如下代码：
+
+``` java
+int a = 1, b = 2, c = 3;
+int d = (c * b) * 12 + a + (a + b * c);
+```
+如果直接交给Javac编译器则不会进行任何优化，字节码如下：
+```
+         0: iconst_1
+         1: istore_1
+         2: iconst_2
+         3: istore_2
+         4: iconst_3
+         5: istore_3
+         6: iload_3
+         7: iload_2       //b
+         8: imul          //计算b*c
+         9: bipush 12     //推入12
+        11: imul          //计算(b*c)*12
+        12: iload_1       //a
+        13: iadd          //计算(b*c)*12+a
+        14: iload_1       //a
+        15: iload_2       //b
+        16: iload_3       //c
+        17: imul          //计算(b*c)
+        18: iadd          //计算a+b*c
+        19: iadd          //计算(b*c)*12+a+(a+b*c)
+        20: istore 4
+        22: return
+```
+当这段代码进入到虚拟机即时编译器后，它将进行如下优化：编译器检查到“c\*b”与“b\*c”是一样的表达式，而且在执行期间b与c的值是不变的。因此这条表达式就可被视为：
+``` java
+int d = E * 12 + a + (a + E);
+```
+这时编译器还可能进行了另外一种优化：代数化简（这取决于哪种虚拟机的编译器以及具体的上下文而定），把表达式变为：
+``` java
+int d = E * 13 + a * 2;
+```
+
+## 数组边界检查消除
+数组边界检查消除（Array Bounds Checking Elimination）是即时编译器中的一项语言相关的经典优化技术。我们知道Java语言是一门动态安全的语言，对数组的读写访问不像C、C\+\+那样在本质上是裸指针操作。如果有一个数组foo[]，在Java语言中访问数组元素foo[i]的时候系统将会自动进行上下界的范围检查，即检查i必须满足i>=0&&i&lt;foo.length这个条件，否则将抛出一个运行时异常：java.lang.ArrayIndexOutOfBoundsException。这对软件开发者来说是一件很好的事情，即使程序员没有专门编写防御代码，也可以避免大部分的溢出攻击。但是对于虚拟机的执行子系统来说，每次数组元素的读写都带有一次隐含的条件判定操作，对于拥有大量数组访问的程序代码，这是一种性能负担。
+
+无论如何，数组边界检查肯定是必须做的，但数组边界检查是不是必须在运行期间一次不漏的检查。例如：数组下标是一个常量，如foo[3]，只要在编译期根据数据流分析来确定foo.length的值，并判断下标“3”没有越界，执行的时候就无须判断了。更加常见的情况是数组访问发生在循环之后，并且使用循环变量来进行数组访问，如果编译器只要通过数据流分析就可以判定循环变量的取值范围永远在[0, foo.length)之内，那么在整个循环中就可以把数组的上下界检查消除，这可以节省很多次的条件判断操作。
+
+将这个数组边界检查的例子放在更高的角度来看，大量的安全检查令编写Java程序比编写C/C\+\+容易的多，如数组越界会得到ArrayIndexOutOfBoundsException异常，空指针访问会得到NullPointException，除数为0会得到ArithmeticException等，在C/C\+\+程序中出现类似的问题，一不小心就会出现Segment Fault信号或者Window编程中常见的“xxx内存不能为Read/Write”之类的提示，处理不好程序就直接崩溃退出了。但这些安全检查也导致了相同的程序，Java要比C/C\+\+做更多的事情，这些事情就成为一种隐式的开销，如果处理不好，就很可能成为一个Java语言比C/C\+\+更慢的因素。要消除这些隐式开销，除了如数组边界检查优化的这种尽可能把运行期检查提到编译期完成的思路之外，另外还有一种思路--隐式异常处理，Java中控指针检查和算数运算中除数为0的检查都是这种思路。例如，程序中访问一个对象foo的某个属性value，那么以Java伪代码表示虚拟机访问的过程如下。
+``` java
+if(foo != null) {
+    return foo.value;
+} else {
+    throw new NullPointException();
+}
+```
+在隐式异常优化后，虚拟机会把上面的伪代码转变成如下操作
+``` java
+try {
+    return foo.value;
+} catch(segment_fault) {
+    uncommon_trap();
+}
+```
+虚拟机会注册一个Segment Fault信号的异常处理器，这样当foo不为空的时候，对value的访问是不会额外消耗一次对foo判空的开销的。代价就是当foo真的为空的时候，必须转入到异常处理器中恢复并抛出NullPointException异常，这个过程必须从用户态转到内核态中处理，结束后再回到用户态，速度远比一次判空检查慢。当foo极少为空的时候，隐式异常优化是值得的，但假如foo经常为空，这样的优化反而会让程序更慢，还好HotSpot会根据运行期间收集到的Profile信息自动选择最优方案。
+
+## 方法内联
+方法内联是编译器最重要的优化手段之一，除了消除方法调用的成本之外，它更重要的意义是为其他优化手段建立良好的基础。如下所示：
+``` java
+public static void foo(Object obj){
+    if(obj != null){
+        System.out.println("do something");
+    }
+}
+
+public static void testInline(String[] args){
+    Object obj = null;
+    foo(obj);
+}
+```
+事实上，testInline方法内部全部都是无用的代码，如果不做内联，后续继续进行了无用代码的消除优化，也无法发现任何“Dead Code”，因为如果分开看，foo和testInline里面的操作都可能是有意义的。
+
+方法内联的优化看起来很简单，不过是把目标方法的代码“复制”到发起调用的方法之中，避免发生真是的方法调用而。但实际上JVM中的内联过程远远没有那么简单，因为如果不是即时编译器做了一些努力，按照经典编译原理的优化理论，大多数的Java方法都无法进行内联。
+
+无法内联的原因是：只有使用invokespecial指令调用的私有方法、实例构造器、父类方法以及使用invokestatic指令进行调用的静态方法才是在编译期进行解析的，除了上述4种方法之外，其他的Java方法调用都需要在运行时进行方法接收者的多态选择，并且都有可能存在多于一个版本的方法接收者，简而言之，Java语言中默认的实例方法是虚方法。
+
+对于一个虚方法，编译期做内联的时候根本无法确定应该使用哪个方法版本。由于Java语言提倡使用面向对象
+
