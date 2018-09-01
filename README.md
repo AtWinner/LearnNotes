@@ -25,4 +25,5 @@
 - [虚拟机字节码执行引擎](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/VM-ByteCode-Execute-Engine.md)
 - [Java中的语法糖](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/Java-Syntactic-Sugar.md)
 - [JVM运行期优化](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/RuntimeOptimize.md)
+- [Java内存模型与线程](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/JavaMemoryModel.md)
 
