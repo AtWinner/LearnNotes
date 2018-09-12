@@ -27,3 +27,7 @@
 - [JVM运行期优化](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/RuntimeOptimize.md)
 - [Java内存模型与线程](%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3JVM/JavaMemoryModel.md)
 
+## Dalvik相关
+- [关于Dalvik虚拟机](Dalvik相关/About-Dalvik.md)
+
+
