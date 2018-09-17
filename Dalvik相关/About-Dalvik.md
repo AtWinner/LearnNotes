@@ -471,3 +471,99 @@ main()中做的第一个重要工作就是启动一个Socket服务端口，该So
         }
     }
 ```
+
+
+### 加载preload-classes
+在ZygoteInit的函数main中，创建完Socket服务端后还不能马上孕育新的进程，因为这个卵还没有预装Framework大部分的类和资源。
+
+预装的类列表是在framework.jar中第一个文本文件列表，名称为preload-classes，该列表的原始定义在文本文件frameworks/base/preload-classes中，而该文件又是通过如下类生成的：
+```
+frameworks/base/tools/preload/WritePreloadedClassFile.java
+```
+生成preload-classes的方法是在Android根目录下执行如下命令
+```
+$java -Xss512M-cp /path/to/preload.jarWritePreloadedClassFile /path/to/.compiled 
+1517 classes were loaded by more than one app.
+Added 147 more to speed up applications.
+1664 total classes will be preloaded.
+Writing object model ...
+Done!
+```
+上述命令中，/path/to/preload.jar是指如下文件：
+```
+out/host/darwin-x86/framework/preload.jar
+```
+- 参数“-Xss”：用于执行程序所需要的JVM栈大小，此处使用512MB，默认大小不能满足程序的运行，会抛出java.lang.StackOverflowError错误信息。
+- WritePreloadedClassFile：表示要执行的具体类。
+
+### 加载preload-resources
+preload-resources是在如下文件中被定义的
+```
+frameworks/base/core/res/res/values/arrays.xml
+```
+在preload-resources中包含了两类资源，一类是drawable资源，另一类是color资源：
+``` xml 
+<array name="preloaded_drawables">
+    <item>@drawable/toast_frame_holo</item>
+    ...
+</array>
+<array name="preloaded_color_state_lists">
+    <item>@color/primary_text_dark</item>
+    ...
+</array>
+```
+加载这些资源的功能是在函数preloadResources()中实现的，在函数中分别调用了如下两个函数来加载这两类资源：preloadDrawables()和preloadColorStateLists()。
+
+具体的加载原理，就是把这些资源读出来，放在一个全局变量中，只要该类资源不被销毁，这些全局变量就会一直保存。
+
+通过全局变量mResources来保存Drawable资源，该资源变量的类型是Resources类，由于在该类内部会保存一个Drawable资源列表，因此实际上是在Resources内部缓存这些Drawable资源的。保存Color资源的全局变量的功能也是mResources实现的。同样，在类Resources内部也有一个Color资源列表。
+
+### 使用fork启动新进程
+fork是Linux系统中的一个系统嗲用，其功能是复制当前进程并产生一个新的进程。除了进程id不同，新的进程将拥有与原始进程完全形同的进程信息。进程信息包括该进程所打开的文件描述符列表、所分配的内存等。当创建新进程后，两个进程将共享已经分配的内存空间，直到其中一个需要向内存中写入数据时，操作系统才负责复制一份目标地址空间，并将要写的数据写入到新的地址中，这就是“copy-on-write（仅当写的时候才复制）”机制，这种机制可以最大限度的在多个进程中共享物理内存。
+
+在所有的操作系统中，都存在一个程序装载器，程序装载器一般会作为操作系统的一部分，并由Shell程序调用。当内核启动后，会首先启动Shell程序。
+
+常见的Shell程序包含如下两大类：
+- 命令行界面的
+- 窗口界面的
+
+Windows系统中的Shell程序就是桌面程序，Ubuntu系统中的Shell程序就是GNOME桌面程序。当启动Shell程序后，用户可以双击桌面图标启动指定的应用程序，而在操作系统内部，启动新的进程包含如下三个过程。
+- 第一个过程，内核创建一个进程数据结构，用于表示将要启动的进程
+- 第二个过程，内核调用程序装载器函数，从指定的程序文件读取程序代码，并将这些程序代码装载到预先设定的内存地址。
+- 第三个过程，装载完毕后，内核将程序指针指向到目标程序地址的入口处开始执行指定的进程。当然，实际的过程会考虑更多的细节，不过大致的思路就是这样。
+
+在一般情况下，没有必要复制进程，而是暗账以上3个过程创建新进程，但当满足条件时，则由于函数fork()的Linux的系统调用，Android中的Java层仅仅是对该方法进行了JNI封装而已，因此，接下来的C代码是介绍使用函数fork()的过程，以便读者对该方法有更具体的认识：
+
+``` c
+#include <sys/types.h>
+#include <unistd.h>
+int main() {
+    pid_t pid;
+    printf("pid = %d, Take camera, by subway, take air! \n", getpid());
+    pid = fork();
+    if(pid > 0) {
+        printf("pid=%d \n", getpid());
+        pid = fork();
+        if(!pid) prinrf("pid=%d, 去看AA！\n", getpid());
+    }
+    else if(!pid) printf("pid=%d, 去看BB！ \n", getpid());
+    else if(pid == -1) perror("fork");
+    getchar();
+}
+//输出的结果如下
+pid = 3927, Take camera, by subway, take air!
+pid=3927
+pid=3929，去看AA!
+pid=3930，去看BB！
+```
+函数fork()的返回值与普通函数调用完全不同，具体如下：
+- 当返回值大于0的时候，代表是父进程
+- 当等于0的时候，代表的是被复制的进程
+
+也就是说，父进程和子进程的代码都在该C文件中，只是不同的进程执行不同的代码，而进程的靠fork()的返回值进行区分的。
+
+由以上的结果可以看出，第一次调用fork()时复制了一个“看AA”进程，然后再父进程中再次调用fork()复制了“看BB”的进程，三者都有各自不同的进程id。
+
+Zygote进程是上述演示代码中的“精灵进程”。在文件[ZygoteInit.java](http://androidxref.com/4.3_r2.1/xref/frameworks/base/core/java/com/android/internal/os/ZygoteInit.java)中复制新锦成是通过在函数runSelectLoopMode()中调用ZygoteConnection的函数runOnce()完成的，在该函数中通过调用forkAndSpecialize()函数来复制一个新的进程。
+
+> 函数forkAndSpecialize()是一个naive方法，其内部的执行原理与上面的C代码类似，当新进程被创建好后，还需做一些完善工作。因为当Zygote复制新进程时，已经创建了一个Socket服务端，而这个服务端是不应该被新进程使用的，否则系统中会有多个进程接收并调用新进程中指定的Class文件的main()函数作为新进程的入口点。而这些正是在调用函数forkAndSpecialize()后根据返回值pid完成的。当pid等于0时，代表的是子进程，函数handleChildProc()会从指定Class文件的main()函数处开始执行。新的进程会完全脱离Zygote进程的孕育过程，称为一个真正的应用进程。
