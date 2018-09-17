@@ -567,3 +567,139 @@ pid=3930，去看BB！
 Zygote进程是上述演示代码中的“精灵进程”。在文件[ZygoteInit.java](http://androidxref.com/4.3_r2.1/xref/frameworks/base/core/java/com/android/internal/os/ZygoteInit.java)中复制新锦成是通过在函数runSelectLoopMode()中调用ZygoteConnection的函数runOnce()完成的，在该函数中通过调用forkAndSpecialize()函数来复制一个新的进程。
 
 > 函数forkAndSpecialize()是一个naive方法，其内部的执行原理与上面的C代码类似，当新进程被创建好后，还需做一些完善工作。因为当Zygote复制新进程时，已经创建了一个Socket服务端，而这个服务端是不应该被新进程使用的，否则系统中会有多个进程接收并调用新进程中指定的Class文件的main()函数作为新进程的入口点。而这些正是在调用函数forkAndSpecialize()后根据返回值pid完成的。当pid等于0时，代表的是子进程，函数handleChildProc()会从指定Class文件的main()函数处开始执行。新的进程会完全脱离Zygote进程的孕育过程，称为一个真正的应用进程。
+
+## 启动SystemServer进程
+SystemServer进程是Zygote孕育出的第一个进程，该进程是从ZygoteInit.java的main()函数中调用startSystemServer()开始的。与启动普通进程的差别在于，zygote类为启动SystemServer提供了专门的函数startSystemServer()，而不是普通的forkAndSpecilize()函数。同时，启动SystemServer进程后，首先要做的事情与普通进程也有所差别。
+
+函数startSystemServer()的主要功能如下：
+- 定义了一个String[]数组，数组中包含了要启动的进程的相关信息，其中最后一项指定新进程启动后装载的第一个Java类，此处即为类com.android.server.SystemServer。
+- 调用forkSystemServer()从当前的Zygote进程孕育出新的进程。该函数是一个native方法，其作用于forkAndSpecilize()相似。
+- 启动新进程后，在函数startSystemServerProcess()中完成如下两件事：
+    - 关闭Socket服务端
+    - 执行com.android.server.SystemServer类中的main()函数。
+
+    除了这两个主要事情外，还做了一些额外的运行环境配置，这些配置主要在函数commonInit()和函数zygoteInitNative()中完成。一旦配置好SystemServer的进程环境后，就从类SystemServer中的main()函数开始执行。
+
+### 启动各种系统服务线程
+SystemServer进程在Android运行环境中扮演了“中枢”的角色，在APK应用中能够直接交互的大部分系统服务都在这个进程中运行，例如WindowManagerServer(Wms)、ActivityManagerSystemService(Ams)、PackageManagerServer(PmS)等常见的应用，这些系统服务都是以一个线程的方式存在于SystemServer进程中的。
+
+SystemServer中的main()函数首先调用的是函数init1()，这是一个native函数，内部会进行一些Dalvik虚拟机相关的初始化工作。该函数执行完毕后，其内部会调用Java端的init2()函数，这就是为什么Java源码中没有引用你init2()的地方，主要的系统服务都是在init2()函数中完成的。
+
+该函数首先创建了一个ServerThread对象，该对象是一个线程，然后直接运行该线程，从ServerThread的run方法内部开始真正启动各种服务线程。基本上，每个服务都有对应的Java类，从编码规范的角度来看，启动这些服务的模式可归于如下三种。
+- 模式一：是指直接使用构造函数构造一个服务，由于大多数服务都对应一个线程，因此，在构造函数内部就会创建一个线程并自动运行。
+- 模式二：是指服务类会提供一个getInstance()方法，通过该方法获取该服务对象，这样的好处是保证系统中仅包含一个该服务对象。
+- 模式三：是指从服务类的main()方法中开始执行。
+
+无论以上任何模式，当创建了服务对象后，有时可能还需要调用该服务类的init()函数或者systemReady()函数来完成该对象的启动，当然，这些都是服务类内部定义的。为了区分以上启动的不同，以下采用一种新的方式来描述该启动过程。
+
+下表中列出了SystemServer中启动的所有服务，以及这些服务的启动模式。
+
+服务类名称 | 作用描述 | 启动模式
+---|---|---
+EntropyService | 提供伪随机数 | 1.0
+PowerManagerService | 电源管理服务 | 1.2/3
+ActivityManagerService | 最核心的服务之一，管理Activity | 自定义
+TelephonyRegistry | 注册电话模块的时间相应，</br>比如重启、关闭、启动等 | 1.0
+PackageManagerService | 程序包管理服务 | 3.3
+AccountManagerService | 账户管理服务，是指联系人账户，</br>而不是Linux系统账户 | 1.0
+ContentService | ContentProvider服务，提供跨进程数据交换 | 3.0
+BatteryService | 电池管理服务 | 1.0
+LightsService | 自然光强度感应传感器服务 | 1.0
+VibratorService | 振动器服务 | 1.0
+AlarmManagerService | 定时器管理服务，提供定时提醒服务 | 1.0
+WindowManagerService | Framework最核心的服务之一，负责窗口管理 | 3.3
+BluetoothService | 蓝牙服务 | 1.0+
+DevicePolicyManagerService | 提供一些系统级别的设置和属性 | 1.3
+StatusBarManagerService | 状态栏管理服务 | 1.3
+ClipboardService | 系统剪贴板服务 | 1.0
+InputMethodManagerService | 输入法管理服务 | 1.0
+NetStatService | 网络状态服务 | 1.0
+NetworkManagementService | 网络管理服务 | NMS.</br>creat()
+ConnectivityService | 网络连接管理服务 | 2.3
+ThrottleService | 暂不清楚其作用 | 1.3
+AccessibilityManagerService | 辅助管理程序截获所有的用户输入，</br>并根据这些输入给用户一些额外的反馈，</br>起到辅助的效果
+MountService | 挂载服务，可通过该服务调用Linux层面的mount程序 | 1.0
+NotificationManagerService | 通知栏管理服务， Android 中的通知栏和状态栏在一起，</br>只是界面上前者在左边，后者在右边
+DeviceStorageMonitorService | 磁盘空间状态检测服务 | 1.0
+LocationManagerService | 地理位置服务 | 1.3
+SearchManagerService | 搜索管理服 | 1.0
+DropBoxManagerService | 通过该服务访问Linux层面的Dropbox 程序 | 1.0
+WallpaperManagerService|墙纸管理服务，墙纸不等同于桌面背景，在 View 系统内部，</br>墙纸可以作为任何窗口的背景|1.3
+AudioService|音频管理服务|1.0
+BackupManagerService|系统备份服务|1.0
+AppWidgetService|Widget服务|1.3
+RecognitionManagerService|身份识别服务|1.3
+DiskStatsService|磁盘统计服务|1.0
+
+AmS的启动模式如下：
+- 调用函数main()返回一个Context对象，而不是AmS服务本身。
+- 调用AmS.setSystemProcess()。
+- 调用AmS.installProviders()。
+- 调用systemReady()，当AmS执行完systemReady()后，会相继启动相关联服务的systemReady()函数，完成整体初始化。
+
+### 启动第一个Activity
+当启动以上服务线程后，AMS服务是以systemReady()调用完成最后启动的，而在AMS的函数systemReady()内部的最后一行代码发出了启动任务队列中最上面一个Activity的消息。因为在系统刚启动时，mMainStack队列中并没有任何Activity对象，所以在类ActivityStack中将调用函数startHomeActivityLocked()。
+``` java
+    boolean startHomeActivityLocked(int userId) {
+        if (mHeadless) {
+            // Added because none of the other calls to ensureBootCompleted seem to fire
+            // when running headless.
+            ensureBootCompleted();
+            return false;
+        }
+
+        if (mFactoryTest == SystemServer.FACTORY_TEST_LOW_LEVEL
+                && mTopAction == null) {
+            // We are running in factory test mode, but unable to find
+            // the factory test app, so just sit around displaying the
+            // error message and don't try to start anything.
+            return false;
+        }
+        Intent intent = new Intent(
+            mTopAction,
+            mTopData != null ? Uri.parse(mTopData) : null);
+        intent.setComponent(mTopComponent);
+        if (mFactoryTest != SystemServer.FACTORY_TEST_LOW_LEVEL) {
+            intent.addCategory(Intent.CATEGORY_HOME);
+        }
+        ActivityInfo aInfo =
+            resolveActivityInfo(intent, STOCK_PM_FLAGS, userId);
+        if (aInfo != null) {
+            intent.setComponent(new ComponentName(
+                    aInfo.applicationInfo.packageName, aInfo.name));
+            // Don't do this if the home app is currently being
+            // instrumented.
+            aInfo = new ActivityInfo(aInfo);
+            aInfo.applicationInfo = getAppInfoForUser(aInfo.applicationInfo, userId);
+            ProcessRecord app = getProcessRecordLocked(aInfo.processName,
+                    aInfo.applicationInfo.uid);
+            if (app == null || app.instrumentationClass == null) {
+                intent.setFlags(intent.getFlags() | Intent.FLAG_ACTIVITY_NEW_TASK);
+                mMainStack.startActivityLocked(null, intent, null, aInfo,
+                        null, null, 0, 0, 0, null, 0, null, false, null);
+            }
+        }
+
+        return true;
+    }
+```
+在开机后，系统从哪个Activity开始执行这一动作，完全取决于mMainStack中的第一个Activity对象。如果在AMS启动时能够构造一个Activity对象（并不是说构造出一个Activity类对象），并将其放在mMainStack中，那么第一个运行的Activity就是这个Activity，这一点不像其他操作系统中通过设置一个固定程序作为第一个启动程序。
+
+
+在AMS的startHomeActivityLocked()中，系统发出了一个category字段包含CATEGORY_HOME的intent。
+
+无论是哪个应用程序，只要声明自己能够响应该intent，那么就可以被认为是Home程序，这就是为什么在Android领域中会存在各种“Home程序”的原因。系统并没有给任何程序赋予“Home”特权，而只是把这个权利交给用户。当系统中有多个程序能够响应该intent时，系统会弹出一个对话框，请求用户选择启动哪个程序，并允许用户记住该选择，从而使得以后每次按Home键后，都启动相同的Activity。这就是第一个Activity的启动过程。
+
+## 加载class类文件
+Java的源代码经过编译后，会生成“.class”格式的文件，即字节码文件。然后再Android中使用dx工具将其转换为后缀为“.jar”格式的Dex类型文件。DVM负责解释并执行编译后的字节码。在解释执行字节码之前，当然要读取文件，分析文件的内容，得到字节码，然后才能解释和执行。在整个的加载过程中，最为重要的就是对Class的加载，Class包含Method，Method又包含code。通过对Class的加载，我们可以获得所需执行的字节码。
+
+### DexFile在内存中的映射
+在Android系统中，Java源文件会被编译成“.jar”格式的Dex文件，在代码中称为Dexfile。在加载Class之前，必先读取相应的jar文件。通常我们使用read()函数来读取文件中的内容，但在Dalvik中使用mmap()函数。与read()不同的是，mmap()函数会将Dex文件映射到内存中，这样，通过普通的内存读取操作，即可访问Dexfile中的内容。
+
+Dexfile的文件格式如图，主要由三部分组成：头部、索引、数据。通过头部可知索引的位置和树木，可知数据区的起始位置。其中classDefsOff指定ClassDef在文件中的起始位置，dataOff指定了数据在文件中的起始位置，ClassDef可理解为Class的索引。通过读取ClassDef可获知Class的基本信息，其中classDataOff指定了Class数据在数据区的位置。
+
+
+### ClassObject——Class在加载后的表现形式
+### 加载Class并生成相应的ClassObject的函数
+### 加载基本类库文件
+### 加载用户类文件
