@@ -939,6 +939,162 @@ bool dvmGcStartup(void)
 ```
 ### 初始化与Heap相关的信息
 在文件[alloc\Heap.c](http://androidxref.com/1.6/xref/dalvik/vm/alloc/Heap.c)中，通过dvmHeapStartup()函数来初始化和Heap相关的信息，例如常见的内存分配和内存管理等工作。
+``` C
+bool dvmHeapStartup()
+{
+    GcHeap *gcHeap;
+
+#if defined(WITH_ALLOC_LIMITS)
+    gDvm.checkAllocLimits = false;
+    gDvm.allocationLimit = -1;
+#endif
+
+    gcHeap = dvmHeapSourceStartup(gDvm.heapSizeStart, gDvm.heapSizeMax);
+    if (gcHeap == NULL) {
+        return false;
+    }
+    gcHeap->heapWorkerCurrentObject = NULL;
+    gcHeap->heapWorkerCurrentMethod = NULL;
+    gcHeap->heapWorkerInterpStartTime = 0LL;
+    gcHeap->softReferenceCollectionState = SR_COLLECT_NONE;
+    gcHeap->softReferenceHeapSizeThreshold = gDvm.heapSizeStart;
+    gcHeap->ddmHpifWhen = 0;
+    gcHeap->ddmHpsgWhen = 0;
+    gcHeap->ddmHpsgWhat = 0;
+    gcHeap->ddmNhsgWhen = 0;
+    gcHeap->ddmNhsgWhat = 0;
+#if WITH_HPROF
+    gcHeap->hprofDumpOnGc = false;
+    gcHeap->hprofContext = NULL;
+#endif
+
+    /* This needs to be set before we call dvmHeapInitHeapRefTable().
+     */
+    gDvm.gcHeap = gcHeap;
+
+    /* Set up the table we'll use for ALLOC_NO_GC.
+     */
+    if (!dvmHeapInitHeapRefTable(&gcHeap->nonCollectableRefs,
+                           kNonCollectableRefDefault))
+    {
+        LOGE_HEAP("Can't allocate GC_NO_ALLOC table\n");
+        goto fail;
+    }
+
+    /* Set up the lists and lock we'll use for finalizable
+     * and reference objects.
+     */
+    dvmInitMutex(&gDvm.heapWorkerListLock);
+    gcHeap->finalizableRefs = NULL;
+    gcHeap->pendingFinalizationRefs = NULL;
+    gcHeap->referenceOperations = NULL;
+
+    /* Initialize the HeapWorker locks and other state
+     * that the GC uses.
+     */
+    dvmInitializeHeapWorkerState();
+
+    return true;
+
+fail:
+    gDvm.gcHeap = NULL;
+    dvmHeapSourceShutdown(gcHeap);
+    return false;
+}
+```
 
 ### 创建GcHeap
+在文件[alloc\HeapSource.c](http://androidxref.com/1.6/xref/dalvik/vm/alloc/HeapSource.c)中，通过函数dvmHeapSourceStartup()来创建GcHeap。源码如下：
+``` C
+GcHeap *
+dvmHeapSourceStartup(size_t startSize, size_t absoluteMaxSize)
+{
+    GcHeap *gcHeap;
+    HeapSource *hs;
+    Heap *heap;
+    mspace msp;
+
+    assert(gHs == NULL);
+
+    if (startSize > absoluteMaxSize) {
+        LOGE("Bad heap parameters (start=%d, max=%d)\n",
+           startSize, absoluteMaxSize);
+        return NULL;
+    }
+
+    /* Create an unlocked dlmalloc mspace to use as
+     * the small object heap source.
+     */
+    msp = createMspace(startSize, absoluteMaxSize, 0);
+    if (msp == NULL) {
+        return false;
+    }
+
+    /* Allocate a descriptor from the heap we just created.
+     */
+    gcHeap = mspace_malloc(msp, sizeof(*gcHeap));
+    if (gcHeap == NULL) {
+        LOGE_HEAP("Can't allocate heap descriptor\n");
+        goto fail;
+    }
+    memset(gcHeap, 0, sizeof(*gcHeap));
+
+    hs = mspace_malloc(msp, sizeof(*hs));
+    if (hs == NULL) {
+        LOGE_HEAP("Can't allocate heap source\n");
+        goto fail;
+    }
+    memset(hs, 0, sizeof(*hs));
+
+    hs->targetUtilization = DEFAULT_HEAP_UTILIZATION;
+    hs->minimumSize = 0;
+    hs->startSize = startSize;
+    hs->absoluteMaxSize = absoluteMaxSize;
+    hs->idealSize = startSize;
+    hs->softLimit = INT_MAX;    // no soft limit at first
+    hs->numHeaps = 0;
+    hs->sawZygote = gDvm.zygote;
+    if (!addNewHeap(hs, msp, absoluteMaxSize)) {
+        LOGE_HEAP("Can't add initial heap\n");
+        goto fail;
+    }
+
+    gcHeap->heapSource = hs;
+
+    countAllocation(hs2heap(hs), gcHeap, false);
+    countAllocation(hs2heap(hs), hs, false);
+
+    gHs = hs;
+    return gcHeap;
+
+fail:
+    destroy_contiguous_mspace(msp);
+    return NULL;
+}
+```
+
+
 ### 追踪位置 
+在文件alloc\HeapSource.c中，通过函数countAllocation()在Heap::object Bitmap上进行标记，以便追踪这些区域的位置。
+``` C
+static inline void
+countAllocation(Heap *heap, const void *ptr, bool isObj)
+{
+    assert(heap->bytesAllocated < mspace_footprint(heap->msp));
+
+    heap->bytesAllocated += mspace_usable_size(heap->msp, ptr) +
+            HEAP_SOURCE_CHUNK_OVERHEAD;
+    if (isObj) {
+        heap->objectsAllocated++;
+        dvmHeapBitmapSetObjectBit(&heap->objectBitmap, ptr);
+    }
+
+    assert(heap->bytesAllocated < mspace_footprint(heap->msp));
+}
+```
+
+### 分配空间
+在文件Heap.c中，通过函数dvmMalloc()实现空间的分配工作，[alloc\Heap.c](http://androidxref.com/1.6/xref/dalvik/vm/alloc/Heap.c)
+
+# DVM的启动过程
+Android系统中的应用程序进程是由Zygote进程孕育出来的，而Zygote进程又是由Init进程启动的。在启动Zygote进程时，会创建一个DVM实例，每当Zygote进程孕育出一个新的应用程序进程时，会将这个DVM实例复制到新的应用程序中，这样可以使每个应用程序进程都拥有一个独立的DVM实例。
