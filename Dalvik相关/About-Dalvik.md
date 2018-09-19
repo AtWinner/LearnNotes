@@ -698,8 +698,247 @@ Java的源代码经过编译后，会生成“.class”格式的文件，即字�
 
 Dexfile的文件格式如图，主要由三部分组成：头部、索引、数据。通过头部可知索引的位置和树木，可知数据区的起始位置。其中classDefsOff指定ClassDef在文件中的起始位置，dataOff指定了数据在文件中的起始位置，ClassDef可理解为Class的索引。通过读取ClassDef可获知Class的基本信息，其中classDataOff指定了Class数据在数据区的位置。
 
+![DexFile文件格式](https://upload-images.jianshu.io/upload_images/3610640-d1beb22bb48dea36.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
 
+在将Dexfile文件映射到内存后，会调用dexFileParse()函数对其进程分析，分析的结果存放于名为DexFile的数据结构中。DexFile中的baseAddr指向映射区的起始位置，pClassDefs指向ClassDefs（即class索引）的起始位置。由于在查找class时，都是使用class的名字进行查找的，所以为了加快查找速度，创建了一个hash表。在hash表中对class名字进行hash，并生成index。这些操作都是在对文件解析时完成的，这样虽然在加载过程中比较耗时，但是在运行过程中却节省大量的查找时间。
+
+解析完毕后，接下来开始加载class文件，在此需要将加载类用ClassObject来保存，所以需要先分析与ClassObject相关的几个数据结构。
+
+首先在文件Object.h中可以看到如下对结构体Object的定义：
+
+``` C
+typedef struct Object {
+    ClassObject *clazz;
+    u4 lock;
+} Object;
+```
+通过结构体Object定义了基本类的实现，这里有如下两个变量。
+- lock：对应Object对象中的锁实现，即notify wait的处理
+- clazz：是结构体指针，姑且不看结构体内容，这里用了指针的定义
+
+``` C
+struct StringObject {
+    ClassObject *clazz;
+    u4 lock;
+    u4 instanceData[i];
+}
+```
+
+任何对象的内存结构体中第一行都是Object结构体，而这个结构体第一个总是一个ClassObject，第二个总是lock。按照C++中的技巧，这些结构体可以当成Object结构体使用，因此所有的类在内存中都具有对象的功能，即可以找到一个类（ClassObject），可以有一个锁（lock）。
+
+StringObject是对String类进行管理的数据对象，ArrayObject是数据相关的管理。
 ### ClassObject——Class在加载后的表现形式
+解析完文件后，需要加载Class的具体内容。在Dalvik中，由数据结构ClassObject负责存放加载的信息。
+
+如下图所示，加载过程会在内存中alloc几个区域，分别存放directMethods、virtualMethods、sfields、ifields。这些信息是从Dex文件的数据区中读取的，首先会读取Class的详细信息，从中获得directMethod、virtualMethod、sfields、ifields等信息，然后再读取。
+
+![加载过程](https://upload-images.jianshu.io/upload_images/3610640-671ec7b50fadd6d3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
 ### 加载Class并生成相应的ClassObject的函数
+接下来分析负责加载工作的函数findClassNoInit()。在获取Class索引时，会分为基本类库文件和用户类文件两种情况。
+
+函数LoadClassFromDex()会先读取Class的具体数据（从ClassDataoff处），然后分别加载directMethod、virtualMethod、sfields、ifields。
+
+为了追求效率，在加载后需要将其缓存起来，以便以后使用。其次，在查找过程中，如果是顺序查找的话会很慢，所以需要使用gDvm.loadedClasses这个Hash表来帮忙。如果一个子类需要调用超累的函数，那它当然要先加载超类了，可能的话，甚至会加载超类的超类。
+
 ### 加载基本类库文件
 ### 加载用户类文件
+在加载用户类文件时，会先加载一个Class，然后这个Class去负责用户类文件的加载，而这个Class又会通过JNI的方式去调用findClassNoInit。具体加载过程与基本类库的加载类似。
+
+# DVM的内存系统
+内存管理是DVM中的一个重要组件，其内存管理的核心是分别实现内存分配和回收的工作，Java语言使用new操作符来分配内存，但是Java语言并没有提供任何操作来释放内存，而是通过垃圾收集机制来回收内存。对于内存管理的实现，我们通过如下三个方面加以分析：
+- 内存分配
+- 内存回收
+- 内存管理和调试
+
+## 如何分配内存
+### 对象布局
+内存管理的主要操作之一是为Java对象分配内存，所有的对象都有一个相同的头部clazz和lock。
+- clazz：指向该对象的类对象，类对象用来描述该对象所属的类，这样可以很容易从一个对象获取该对象所属的类的具体信息。
+- lock：是一个无符号整数，用以实现对象的同步。
+- data：用于存放对象数据，根据对象的不同，数据区的大小是不同的，
+
+### 堆
+堆的DVM从操作系统分配的一块连续的虚拟内存。其中heapBase表示堆的起始地址，heapLimit表示堆的最大地址，堆大小的最大值可以通过“-Xmx”选项或dalvik.vm.heapsize指定。在原生系统中，一般dalvik.vm.heapsize的值是32MB，在MIUI中，将其设为64MB。
+### 堆内存位图
+在虚拟机中维护了两个对应于堆内存的位图，称为liveBits和markBits。在对象布局中，我们看到对象最小占用8个字节。在为对象分配内存时，要求必须8字节对齐。这也就是说，对象的大小会调整为8字节的倍数。堆内存位图就是用来描述堆内存的，每一个bit描述8个字节，因此堆内存的，每一个bit描述8个字节，因此堆内存位图的大小是对堆的1/64。对于MIUI的实现来说，这两个位图各占1MB。
+
+liveBits的功能是跟踪堆中已经分配的内存，每分配一个对象时，对象的内存起始地址对应于位图中的位被设为1。
+
+### 堆内存管理
+在DVM的实现中，是通过底层的bionicC库的malloc/free操作来分配和释放内存的。库bionicC的malloc/free操作是基于DougLea的实现（dlmalloc），这是一个被广泛使用、久经考验的C内存管理库。
+### dvmAllocObject
+在DVM中，操作符new最终对应C函数dvmAllocObject()。
+```
+Object* dvmAllocObject(ClassObject* clazz, int flags)
+{
+    Object* newObj;
+
+    assert(clazz != NULL);
+    assert(dvmIsClassInitialized(clazz) || dvmIsClassInitializing(clazz));
+
+    /* allocate on GC heap; memory is zeroed out */
+    newObj = (Object*)dvmMalloc(clazz->objectSize, flags);
+    if (newObj != NULL) {
+        DVM_OBJECT_INIT(newObj, clazz);
+        dvmTrackAllocation(clazz, clazz->objectSize);   /* notify DDMS */
+    }
+
+    return newObj;
+}
+```
+为了分配内存，虚拟机尽了最大的努力，做了4次尝试。其中进行了两次垃圾收集，第一次部手机SoftReference，第二次收集SoftReference。从中我们可以看到垃圾收集的时机，实质上，在Dalvik虚拟机实现中有3个时机可以触发垃圾收集的运行：
+- 程序员显式调用System.gc()
+- 内存分配失败时
+- 如果分配的对象大小超过384KB，运行并发标记（Concurrent Mark）
+
+## 内存管理机制
+DVM虚拟机的内存管理需要依赖于Linux的内存管理机制，DVM的内存管理的实现源码保存在vm\alloc目录下。
+### 表示堆的结构体
+在文件HeapSource.cpp中定义表示堆的结构体：[查看源码](http://androidxref.com/1.6/xref/dalvik/vm/alloc/HeapSource.c)
+
+``` C
+//此段代码来自Android1.6
+typedef struct {
+    /* The mspace to allocate from.
+     * 使用dlmalloc分配的内存
+     */
+    mspace *msp;
+
+    /* The bitmap that keeps track of where objects are in the heap.
+     */
+    HeapBitmap objectBitmap;
+
+    /* The largest size that this heap is allowed to grow to.
+     * 堆可以增长的最大值
+     */
+    size_t absoluteMaxSize;
+
+    /* Number of bytes allocated from this mspace for objects,
+     * including any overhead.  This value is NOT exact, and
+     * should only be used as an input for certain heuristics.
+     * 已经分配的字节数
+     */
+    size_t bytesAllocated;
+
+    /* Number of objects currently allocated from this mspace.
+     * 已分配的对象数
+     */
+    size_t objectsAllocated;
+} Heap;
+```
+
+### 表示位图堆的结构体数据
+在文件HeapBitmap.h中定义表示位图堆的结构体数据：[查看源码](http://androidxref.com/1.6/xref/dalvik/vm/alloc/HeapBitmap.h)
+
+``` C
+
+typedef struct {
+    /* The bitmap data, which points to an mmap()ed area of zeroed
+     * anonymous memory.
+     * 位图数据
+     */
+    unsigned long int *bits;
+
+    /* The size of the memory pointed to by bits, in bytes.
+     * 位图大小
+     */
+    size_t bitsLen;
+
+    /* The base address, which corresponds to the first bit in
+     * the bitmap.
+     * 位图对应的对象指针数组的首地址
+     */
+    uintptr_t base;
+
+    /* The highest pointer value ever returned by an allocation
+     * from this heap.  I.e., the highest address that may correspond
+     * to a set bit.  If there are no bits set, (max < base).
+     * 为使用中的最后一位被设置的对象指针地址，如果全没设置则（max < base）
+     */
+    uintptr_t max;
+} HeapBitmap;
+```
+
+### HeapSource结构体
+在DVM中，使用结构体HeapSource来管理各种Heap数据，Heap只是其中的一个子项，其在HeapSource.c中定义：
+```
+struct HeapSource {
+    /* Target ideal heap utilization ratio; range 1..HEAP_UTILIZATION_MAX
+     * 堆的使用率，范围从1到HEAP_UTILIZATION_MAX
+     */
+    size_t targetUtilization;
+
+    /* Requested minimum heap size, or zero if there is no minimum.
+     * 分配堆的最小尺寸
+     */
+    size_t minimumSize;
+
+    /* The starting heap size.
+     * 堆分配的初始尺寸
+     */
+    size_t startSize;
+
+    /* The largest that the heap source as a whole is allowed to grow.
+     * 允许分配的堆增长到的最大尺寸
+     */
+    size_t absoluteMaxSize;
+
+    /* The desired max size of the heap source as a whole.
+     * 理想的堆的最大尺寸
+     */
+    size_t idealSize;
+
+    /* The maximum number of bytes allowed to be allocated from the
+     * active heap before a GC is forced.  This is used to "shrink" the
+     * heap in lieu of actual compaction.
+     * 在卡户收集前允许堆分配的最大尺寸
+     */
+    size_t softLimit;
+
+    /* The heaps; heaps[0] is always the active heap,
+     * which new objects should be allocated from.
+     * 堆数组，最大尺寸为3
+     */
+    Heap heaps[HEAP_SOURCE_MAX_HEAP_COUNT];
+
+    /* The current number of heaps.
+     * 当前堆的个数
+     */
+    size_t numHeaps;
+
+    /* External allocation count.
+     * 对外分配计数
+     */
+    size_t externalBytesAllocated;
+
+    /* The maximum number of external bytes that may be allocated.
+     * 允许外部分配的最大值
+     */
+    size_t externalLimit;
+
+    /* True if zygote mode was active when the HeapSource was created.
+     * 在创建这个HeapSource的时候是否是Zygote模式，确定是否有Zygote进程
+     */
+    bool sawZygote;
+};
+```
+
+### 与mark bits相关的结构体
+在MarkSweep.h中定义了与mark bits相关的结构体，[源码](http://androidxref.com/1.6/xref/dalvik/vm/alloc/MarkSweep.h)
+### 结构体GcHeap
+在文件HeapInternal.h中定义了Dalvik的垃圾回收机制，需要用到结构体GcHeap，[源码](http://androidxref.com/1.6/xref/dalvik/vm/alloc/HeapInternal.h)
+### 初始化垃圾回收器
+在文件Init.c中，通过函数dvmGcStartup()来初始化垃圾回收器：
+``` C
+bool dvmGcStartup(void)
+{
+    dvmInitMutex(&gDvm.gcHeapLock);
+    return dvmHeapStartup();
+}
+```
+### 初始化与Heap相关的信息
+在文件[alloc\Heap.c](http://androidxref.com/1.6/xref/dalvik/vm/alloc/Heap.c)中，通过dvmHeapStartup()函数来初始化和Heap相关的信息，例如常见的内存分配和内存管理等工作。
+
+### 创建GcHeap
+### 追踪位置 
