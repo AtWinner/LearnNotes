@@ -1098,3 +1098,83 @@ countAllocation(Heap *heap, const void *ptr, bool isObj)
 
 # DVM的启动过程
 Android系统中的应用程序进程是由Zygote进程孕育出来的，而Zygote进程又是由Init进程启动的。在启动Zygote进程时，会创建一个DVM实例，每当Zygote进程孕育出一个新的应用程序进程时，会将这个DVM实例复制到新的应用程序中，这样可以使每个应用程序进程都拥有一个独立的DVM实例。
+## 创建一个DVM实例
+在启动Zygote进程的过程中，以调用类AndroidRuntime的成员函数start作为启动DVM的第一步。在文件[framework/base/core/jni/AndroidRuntime.cpp](http://androidxref.com/4.3_r2.1/xref/frameworks/base/core/jni/AndroidRuntime.cpp)中
+
+## 创建并初始化DVM实例
+调用函数JNI\_CreateJavaVM创建并初始化一个DVM实例，此函数在文件[dalvik/vm/Jni.cpp](http://androidxref.com/4.3_r2.1/xref/dalvik/vm/Init.cpp)中的定义。
+
+## 创建JNIEnvExt对象
+再分析函数dvmCreateJNIEnv，功能是创建JNIEnvExt对象以描述当前的JNI环境，并没置此JNIEnvExt对象的宿主DVM和所使用的本地接口。此处的宿主DVM就是当前进程的DVM，被保存在全局变量gDvm的成员变量vmList中。函数dvmCreateJNIEnv在文件dalvik\vm\Jni.cpp。
+## 设置当前进程
+dvmInitZygote，功能是调用系统中的setpgid函数来设置当前进程，设置Zygote进程的进程组ID。当系统的调用setpgid时会传递两个都是0的参数，这表示Zygote进程的进程组ID与进程ID相同，即Zygote进程运行在一个单独的进程组里面。函数dvmInitZygote在文件[dalvik/vm/Init.cpp](http://androidxref.com/1.6/xref/dalvik/vm/Init.c)中定义
+``` C
+static bool dvmInitZygote(void)
+{
+    /* zygote goes into its own process group */
+    setpgid(0,0);
+
+    return true;
+}
+```
+
+# 创建DVM进程
+在Android系统中，DVM不但可以执行Java代码，而且还可以执行Native代码。在执行这些C/C\+\+函数的过程中可以通过本地操作系统提供的系统调用创建Linux进程和线程。如果在Native代码中创建出来的线程能够执行Java代码，那么它实际上又可以看作是一个DVM线程。
+
+在Android系统中，通过类android.os.Process的静态成员函数start来创建DVM进程。即由ActivityManagerService服务通过类android.os.Process的静态成员函数start来请求Zygote进程的方式创建，而Zygote进程又是通过类dalvik.system.Zygote的静态成员函数forkAndSpecialize创建该Android应用程序的。
+## 初始化运行的DVM
+在函数forkAndSpecializeCommon中还调用了函数dvmInitAfterZygote，功能是进一步初始化在新创建的进程中运行的DVM。函数dvmInitAfterZygote在文件dalvik/vm/Init.cpp中定义，具体实现代码
+```
+bool dvmInitAfterZygote(void)
+{
+    u8 startHeap, startQuit, startJdwp;
+    u8 endHeap, endQuit, endJdwp;
+    
+    startHeap = dvmGetRelativeTimeUsec();
+
+    /*
+     * Post-zygote heap initialization, including starting
+     * the HeapWorker thread.
+     */
+    if (!dvmGcStartupAfterZygote())
+        return false;
+
+    endHeap = dvmGetRelativeTimeUsec();
+    startQuit = dvmGetRelativeTimeUsec();
+
+    /* start signal catcher thread that dumps stacks on SIGQUIT */
+    if (!gDvm.reduceSignals && !gDvm.noQuitHandler) {
+        if (!dvmSignalCatcherStartup())
+            return false;
+    }
+
+    /* start stdout/stderr copier, if requested */
+    if (gDvm.logStdio) {
+        if (!dvmStdioConverterStartup())
+            return false;
+    }
+
+    endQuit = dvmGetRelativeTimeUsec();
+    startJdwp = dvmGetRelativeTimeUsec();
+
+    /*
+     * Start JDWP thread.  If the command-line debugger flags specified
+     * "suspend=y", this will pause the VM.  We probably want this to
+     * come last.
+     */
+    if (!dvmInitJDWP()) {
+        LOGD("JDWP init failed; continuing anyway\n");
+    }
+
+    endJdwp = dvmGetRelativeTimeUsec();
+
+    LOGV("thread-start heap=%d quit=%d jdwp=%d total=%d usec\n",
+        (int)(endHeap-startHeap), (int)(endQuit-startQuit),
+        (int)(endJdwp-startJdwp), (int)(endJdwp-startHeap));
+
+    return true;
+}
+
+```
+
+> DVM进程的实质就是Linux进程
